@@ -1413,6 +1413,8 @@ git add app/src/shared/deriveMarkers.ts app/src/shared/__tests__/deriveMarkers.t
 git commit -m "feat(app): 最終マーカー列の導出(セクション編集・しきい値・静寂IN/OUT・削除)"
 ```
 
+> **レビュー後の強化(2026-07-12 適用済み、commit d1efce2)**: セクションマーカー ID は上記サンプルの位置ベース `sec-{i}` ではなく**安定キー方式 `sec-o{元index}` / `sec-a{追加順}`** が正(削除の編集跨ぎ保証、スペック §6 の意図)。beat/bar/silence の ID はグリッド編集・しきい値変更で振り直されるため、UI はその際に該当 deletedMarkerIds を除去する(計画③の責務、モジュール docstring に契約明記済み)。回帰テスト4件追加(50/50)。
+
 ---
 
 ### Task 6: ターゲット表・ファイル命名・エクスポータ共通部品 (naming / helpers)
