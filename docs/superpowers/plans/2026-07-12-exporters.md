@@ -1988,7 +1988,7 @@ describe("exportMidi", () => {
     const ons = smf.tracks[2]!.filter((e) => e.kind === "st90" && e.data[1]! > 0);
     expect(ons).toHaveLength(2); // bar@0.5, beat@1.0(重複beat@0.5は出ない)
     expect(ons[0]!.data[0]).toBe(48);
-    expect(ons[0]!.tick).toBe(960); // 0.5s @120bpm
+    expect(ons[0]!.tick).toBe(480); // 0.5s @120bpm = 1拍 = TPQ(480)tick
     expect(ons[1]!.data[0]).toBe(36);
   });
 
