@@ -112,3 +112,27 @@ describe("可変テンポ", () => {
     expect(barsOf(grid).map((b) => b.timeSec)).toEqual([0.5, 3.1]);
   });
 });
+
+describe("入力サニタイズ(レビュー強化)", () => {
+  it("bpmOverride=Infinityでもハングせずフォールバック", () => {
+    const grid = deriveGrid(fixedAnalysis(), edits({ bpmOverride: Infinity }));
+    expect(grid.length).toBeGreaterThan(0);
+    expect(grid.length).toBeLessThan(2000); // 10秒×6000BPM上限=1000拍以内
+  });
+
+  it("bpmOverride=NaN/負は上書きなし扱い", () => {
+    expect(deriveGrid(fixedAnalysis(), edits({ bpmOverride: NaN }))).toHaveLength(20);
+    expect(deriveGrid(fixedAnalysis(), edits({ bpmOverride: -5 }))).toHaveLength(20);
+  });
+
+  it("小数のdownbeatShiftは丸められ、小節が消えない", () => {
+    const bars = barsOf(deriveGrid(fixedAnalysis(), edits({ downbeatShift: 0.5 })));
+    expect(bars.length).toBeGreaterThan(0);
+    expect(bars[0]!.timeSec).toBeCloseTo(0.75, 9); // round(0.5)=1 相当
+  });
+
+  it("beatsPerBar=NaNは4/4扱い", () => {
+    const bars = barsOf(deriveGrid(fixedAnalysis(), edits({ beatsPerBar: NaN })));
+    expect(bars.map((b) => b.timeSec)).toEqual([0.25, 2.25, 4.25, 6.25, 8.25]);
+  });
+});

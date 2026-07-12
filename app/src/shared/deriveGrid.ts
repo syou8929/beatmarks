@@ -17,12 +17,20 @@ function mod(n: number, m: number): number {
 
 export function deriveGrid(analysis: AnalysisResult, edits: EditState): GridBeat[] {
   const dur = analysis.durationSec;
-  const bpb = Math.max(1, Math.floor(edits.beatsPerBar));
+  const bpb = Number.isFinite(edits.beatsPerBar)
+    ? Math.max(1, Math.floor(edits.beatsPerBar))
+    : 4;
 
   // 1) 基礎拍列
   let times: number[];
-  if (edits.bpmOverride && edits.bpmOverride > 0) {
-    const period = 60 / edits.bpmOverride;
+  const bpmOverride =
+    edits.bpmOverride !== undefined && Number.isFinite(edits.bpmOverride) && edits.bpmOverride > 0
+      ? edits.bpmOverride
+      : undefined;
+  if (bpmOverride !== undefined) {
+    // period下限10ms(=6000BPM上限): タップテンポの異常値(Δt≈0→bpm=∞)でも
+    // ループが停止しないことを構造的に保証する(レビュー指摘)
+    const period = Math.max(0.01, 60 / bpmOverride);
     times = [];
     for (let t = analysis.gridOffsetSec; t < dur; t += period) times.push(t);
   } else {
@@ -51,17 +59,20 @@ export function deriveGrid(analysis: AnalysisResult, edits: EditState): GridBeat
     }
     anchorIndex = best;
   } else {
-    anchorIndex = mod(analysis.downbeatPhase + edits.downbeatShift, bpb);
+    const shift = Number.isFinite(edits.downbeatShift) ? Math.round(edits.downbeatShift) : 0;
+    anchorIndex = mod(analysis.downbeatPhase + shift, bpb);
   }
 
   const freeBefore = edits.gridAnchor?.freeBefore ?? false;
-  const anchorTime = times[anchorIndex]!;
+  // 非アンカー時は anchorIndex が times.length 以上になりうる(短尺クリップ等)。
+  // その場合 freeBefore は必ず false なので anchorTime は参照されない。
+  const anchorTime: number | undefined = times[anchorIndex];
 
   return times.map((t, i) => {
     const rel = i - anchorIndex;
     const isBar = mod(rel, bpb) === 0;
     const barNumber = Math.floor(rel / bpb) + 1;
-    const free = freeBefore && t < anchorTime - 1e-9;
+    const free = freeBefore && anchorTime !== undefined && t < anchorTime - 1e-9;
     return { timeSec: t, index: i, isBar, barNumber, free };
   });
 }
