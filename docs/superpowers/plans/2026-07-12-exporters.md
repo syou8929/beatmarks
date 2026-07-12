@@ -2466,6 +2466,8 @@ git add app/src/shared/exporters/aejsx.ts app/src/shared/__tests__/exporters-aej
 git commit -m "feat(app): After Effects .jsxエクスポータ(ES3・matchName・エンベロープ焼き込み)"
 ```
 
+> **レビュー後の修正(2026-07-12 適用済み、commit 710b6cc)**: 上記サンプルに対し3点修正が入っている — ①同一フレーム間引きは「フレーム番号を先に確定→(frame, 優先度)でソート→dedup」(丸め衝突する異なるtimeSecでも優先度が正しく効く。サンプルのtimeSecソートは誤り) ②レイヤーマーカーは `audioLayer.marker`(`property('Marker')` は日本語AEで壊れる非公式ルックアップ) ③生成コード内コメントはASCII英語。回帰テスト3件追加(84/84)。実装はこの修正込みが正。
+
 ---
 
 ### Task 10: Premiere FCP XML エクスポータ
