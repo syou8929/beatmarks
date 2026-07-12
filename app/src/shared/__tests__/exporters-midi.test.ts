@@ -150,4 +150,19 @@ describe("exportMidi", () => {
     expect(smf.ntrks).toBe(4);
     expect(smf.tracks[2]!.filter((e) => e.kind === "st90")).toHaveLength(0);
   });
+
+  it("同一tickではノートオフがノートオンより先に並ぶ", () => {
+    // 120bpm: 0.0625s = 60tick = NOTE_LEN_TICKS → hit1のoffとhit2のonが同tick(1020)
+    const collide: Marker[] = [
+      { id: "h1", sourceId: "s", timeSec: 1.0, type: "hit", label: "low",
+        color: "#ff7847", source: "auto", meta: { strength: 0.5, band: "low" } },
+      { id: "h2", sourceId: "s", timeSec: 1.0625, type: "hit", label: "mid",
+        color: "#ffd166", source: "auto", meta: { strength: 0.5, band: "mid" } },
+    ];
+    const smf = parseSmf(exportMidi(collide, ctx({ include: ["hit"] })));
+    const at1020 = smf.tracks[3]!.filter((e) => e.tick === 1020 && e.kind.startsWith("st"));
+    expect(at1020.map((e) => e.kind)).toEqual(["st80", "st90"]); // off(35) → on(38)
+    expect(at1020[0]!.data[0]).toBe(35);
+    expect(at1020[1]!.data[0]).toBe(38);
+  });
 });
