@@ -1063,6 +1063,8 @@ git add app/src/shared/deriveGrid.ts app/src/shared/__tests__/deriveGrid.test.ts
 git commit -m "feat(app): 拍/小節グリッド導出(bpm上書き・拍子・1拍目ずらし・小節1アンカー)"
 ```
 
+> **レビュー後の強化(2026-07-12 適用済み、commit 0088130)**: 上記サンプルに加えて入力サニタイズが入っている — bpmOverride は非有限/0以下を「上書きなし」扱い+period下限10ms(タップテンポΔt≈0での無限ループ防止)、downbeatShift は round、beatsPerBar は NaN→4、anchorTime は `number | undefined` 化。実装はこの強化込みが正。
+
 ---
 
 ### Task 5: 最終マーカー列の組み立て (deriveMarkers)
