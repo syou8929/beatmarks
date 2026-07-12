@@ -42,6 +42,8 @@ export function exportJson(markers: Marker[], ctx: ExportContext): string {
       durationSec: ctx.audioDurationSec,
       bpm: ctx.bpmLabel,
       key: ctx.keyLabel,
+      tempoMap: ctx.tempoMap,
+      envelopes: ctx.envelopes,
       markers: items,
     },
     null,

@@ -63,6 +63,18 @@ describe("exportJson", () => {
     expect(parsed.markers[1].frame).toBe(Math.round((0.25 * 30000) / 1001)); // 7
     expect(parsed.fps.label).toBe("29.97");
   });
+
+  it("スペック§8: tempoMapとenvelopesを含む(envelopesはnull可)", () => {
+    const parsed = JSON.parse(exportJson(MARKERS, ctx()));
+    expect(parsed.tempoMap).toEqual([{ timeSec: 0, bpm: 120 }]);
+    expect(parsed.envelopes).toBeNull();
+    const env = {
+      sampleRateHz: 100,
+      total: [0.5, 0.5], low: [0.1, 0.1], mid: [0.1, 0.1], high: [0.1, 0.1],
+    };
+    const withEnv = JSON.parse(exportJson(MARKERS, ctx({ envelopes: env })));
+    expect(withEnv.envelopes).toEqual(env);
+  });
 });
 
 describe("exportCsv", () => {
