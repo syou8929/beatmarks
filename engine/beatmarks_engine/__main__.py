@@ -8,7 +8,7 @@ import argparse
 import json
 import sys
 
-from . import ENGINE_VERSION
+from beatmarks_engine import ENGINE_VERSION
 
 
 def main(argv=None) -> int:
@@ -23,8 +23,8 @@ def main(argv=None) -> int:
         return 0
 
     if args.analyze:
-        from .analyze import analyze
-        from .audio_io import AudioLoadError
+        from beatmarks_engine.analyze import analyze
+        from beatmarks_engine.audio_io import AudioLoadError
         try:
             result = analyze(
                 args.analyze,
@@ -41,7 +41,7 @@ def main(argv=None) -> int:
             print(text)
         return 0
 
-    from .rpc import RpcServer
+    from beatmarks_engine.rpc import RpcServer
     RpcServer().serve_forever()
     return 0
 
