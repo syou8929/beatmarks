@@ -207,3 +207,30 @@ describe("IDの安定性(レビュー強化)", () => {
     expect(at025).toEqual(["bar", "beat", "hit", "custom"]);
   });
 });
+
+describe("範囲外セクション編集のクランプ(最終レビュー対応)", () => {
+  it("durationSec超のmoveでも負のdurationが生まれない", () => {
+    const ms = deriveMarkers(
+      analysis(),
+      edits({ sectionEdits: [{ op: "move", index: 1, startSec: 15 }] }),
+      "s",
+    );
+    const secs = byType(ms, "section");
+    for (const s of secs) {
+      expect(s.timeSec).toBeGreaterThanOrEqual(0);
+      expect(s.timeSec).toBeLessThanOrEqual(10);
+      expect(s.meta!.durationSec!).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it("負のstartSecのaddは0にクランプ", () => {
+    const ms = deriveMarkers(
+      analysis(),
+      edits({ sectionEdits: [{ op: "add", startSec: -3, label: "前奏", color: "#888888" }] }),
+      "s",
+    );
+    const secs = byType(ms, "section");
+    expect(secs[0]!.timeSec).toBe(0);
+    expect(secs.every((s) => s.timeSec >= 0)).toBe(true);
+  });
+});

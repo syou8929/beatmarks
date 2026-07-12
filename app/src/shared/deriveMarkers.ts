@@ -61,6 +61,8 @@ function applySectionEdits(analysis: AnalysisResult, edits: EditState): WorkingS
     else if (e.op === "recolor") target.color = e.color;
     else if (e.op === "delete") target.deleted = true;
   }
+  // startSecを[0, durationSec]にクランプ(ソート前)
+  for (const w of work) w.startSec = Math.min(Math.max(0, w.startSec), analysis.durationSec);
   const alive = work.filter((w) => !w.deleted).sort((a, b) => a.startSec - b.startSec);
   if (alive.length > 0) alive[0]!.startSec = 0; // 先頭は常に曲頭
   return alive;
