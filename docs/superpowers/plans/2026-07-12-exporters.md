@@ -3375,6 +3375,8 @@ git add app/src/shared/exporters/wavCues.ts app/src/shared/__tests__/exporters-w
 git commit -m "feat(app): WAVキューポイント埋め込みエクスポータ"
 ```
 
+> **レビュー後の修正(2026-07-12 適用済み、commit 071d5d3)**: 上記サンプルの ByteWriter(number[] 蓄積+out/file 二重ラップ)は実運用サイズ(30-50MB WAV)で致命的に遅くメモリを浪費するため、**growable Uint8Array + バルク .set() + patchU32 による単一ライター構成**に書き換え済み(5MBで2324ms→9-26ms)。チャンクフォーマットロジックは不変。奇数チャンク往復+5MB回帰テスト追加(109/109)。実装はこの修正込みが正。
+
 ---
 
 ### Task 14: エクスポータレジストリと統合ゴールデンテスト
