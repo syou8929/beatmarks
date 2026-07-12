@@ -161,3 +161,49 @@ describe("削除とカスタム", () => {
     expect(byType(ms, "bar")[0]!.label).toBe("小節1");
   });
 });
+
+describe("IDの安定性(レビュー強化)", () => {
+  it("セクションIDは他セクションの削除を跨いで安定", () => {
+    const base = deriveMarkers(analysis(), edits(), "s");
+    const secB = byType(base, "section")[1]!; // 元index=1のB
+    expect(secB.id).toBe("sec-o1");
+    // Bをid指定で削除 → その後Aをedit削除しても、消えるのはBのままAが残る
+    const ms = deriveMarkers(
+      analysis(),
+      edits({
+        deletedMarkerIds: [secB.id],
+        sectionEdits: [{ op: "delete", index: 0 }],
+      }),
+      "s",
+    );
+    expect(byType(ms, "section")).toHaveLength(0); // A=edit削除, B=id削除
+  });
+
+  it("追加セクションはsec-a{n}", () => {
+    const ms = deriveMarkers(
+      analysis(),
+      edits({ sectionEdits: [{ op: "add", startSec: 2.25, label: "間奏", color: "#888888" }] }),
+      "s",
+    );
+    expect(byType(ms, "section").map((m) => m.id)).toContain("sec-a0");
+  });
+
+  it("不正indexのsectionEditは無視される", () => {
+    const ms = deriveMarkers(
+      analysis(),
+      edits({ sectionEdits: [{ op: "rename", index: 99, label: "x" }] }),
+      "s",
+    );
+    expect(byType(ms, "section").map((m) => m.label)).toEqual(["A", "B ★"]);
+  });
+
+  it("同時刻マーカーはTYPE_ORDER順", () => {
+    const custom = {
+      id: "c1", sourceId: "s", timeSec: 0.25, type: "custom" as const,
+      label: "同時刻", color: "#ffd166", source: "user" as const,
+    };
+    const ms = deriveMarkers(analysis(), edits({ customMarkers: [custom] }), "s");
+    const at025 = ms.filter((m) => m.timeSec === 0.25).map((m) => m.type);
+    expect(at025).toEqual(["bar", "beat", "hit", "custom"]);
+  });
+});

@@ -1,4 +1,10 @@
-/** 解析+編集 → 最終マーカー列(単一ソース分)。エクスポータと UI が共有する唯一の導出点。 */
+/** 解析+編集 → 最終マーカー列(単一ソース分)。エクスポータと UI が共有する唯一の導出点。
+ *  マーカーIDの安定性: section は元添字/追加順キー(sec-o0, sec-a1)で編集を跨いで
+ *  安定。hit は解析配列添字で常に安定。beat/bar/silence の ID はグリッド編集・
+ *  しきい値変更で振り直されるため、deletedMarkerIds の該当エントリは
+ *  グリッド/しきい値を変えた時点で無効(UI側はその際に beat-/bar-/sil- を
+ *  deletedMarkerIds から除去すること — 計画③の責務)。
+ */
 import { barsOf, deriveGrid } from "./deriveGrid.js";
 import { detectSilencesFromEnvelope } from "./envelope.js";
 import type { AnalysisResult, Band, EditState, Marker, SectionInfo } from "./types.js";
@@ -19,6 +25,7 @@ const TYPE_ORDER: Record<Marker["type"], number> = {
 };
 
 interface WorkingSection {
+  key: string;
   startSec: number;
   label: string;
   color: string;
@@ -28,7 +35,8 @@ interface WorkingSection {
 }
 
 function applySectionEdits(analysis: AnalysisResult, edits: EditState): WorkingSection[] {
-  const work: WorkingSection[] = analysis.sections.map((s: SectionInfo) => ({
+  const work: WorkingSection[] = analysis.sections.map((s: SectionInfo, i) => ({
+    key: `o${i}`,
     startSec: s.startSec,
     label: s.label,
     color: SECTION_COLORS[s.clusterId % SECTION_COLORS.length]!,
@@ -36,9 +44,11 @@ function applySectionEdits(analysis: AnalysisResult, edits: EditState): WorkingS
     chorusCandidate: s.chorusCandidate,
     deleted: false,
   }));
+  let addSeq = 0;
   for (const e of edits.sectionEdits) {
     if (e.op === "add") {
       work.push({
+        key: `a${addSeq++}`,
         startSec: e.startSec, label: e.label, color: e.color,
         renamed: true, chorusCandidate: false, deleted: false,
       });
@@ -85,7 +95,7 @@ export function deriveMarkers(
     const end = i + 1 < sections.length ? sections[i + 1]!.startSec : dur;
     const label = s.chorusCandidate && !s.renamed ? `${s.label} ★` : s.label;
     out.push({
-      id: `sec-${i}`, sourceId, timeSec: s.startSec, type: "section",
+      id: `sec-${s.key}`, sourceId, timeSec: s.startSec, type: "section",
       label, color: s.color, source: "auto",
       meta: { durationSec: end - s.startSec },
     });
