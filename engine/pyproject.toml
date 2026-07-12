@@ -26,3 +26,13 @@ include = ["beatmarks_engine*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: 時間のかかるテスト(既定で実行しない場合は -m 'not slow')"]
+filterwarnings = [
+    # audioread が rawread.py 内で非推奨の stdlib モジュールを import する際の警告 (Python 3.13 で削除予定、当方コードは未使用)
+    "ignore:'aifc' is deprecated and slated for removal in Python 3\\.13:DeprecationWarning:audioread\\.rawread",
+    "ignore:'audioop' is deprecated and slated for removal in Python 3\\.13:DeprecationWarning:audioread\\.rawread",
+    "ignore:'sunau' is deprecated and slated for removal in Python 3\\.13:DeprecationWarning:audioread\\.rawread",
+    # librosa が PySoundFile 読み込み失敗時に audioread へフォールバックする際の想定内の通知 (壊れたファイルのテストで発生)
+    "ignore:PySoundFile failed\\. Trying audioread instead\\.:UserWarning",
+    # librosa 内部の非推奨 audioread 経路の呼び出し (librosa 0.10 で非推奨、当方コードは呼び出し方法を変更していない)
+    "ignore:librosa\\.core\\.audio\\.__audioread_load:FutureWarning:librosa\\.core\\.audio",
+]

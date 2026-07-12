@@ -15,7 +15,7 @@ class AudioLoadError(Exception):
     """音声が読み込めない・空・壊れている。"""
 
 
-def load_analysis_audio(path) -> tuple[np.ndarray, int]:
+def load_analysis_audio(path: str | Path) -> tuple[np.ndarray, int]:
     p = Path(path)
     if not p.is_file():
         raise AudioLoadError(f"file not found: {p}")

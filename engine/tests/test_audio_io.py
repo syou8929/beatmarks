@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
+import soundfile as sf
 
-from synth import SR, click_track, write_wav
+from synth import click_track, write_wav
 from beatmarks_engine.audio_io import ANALYSIS_SR, AudioLoadError, load_analysis_audio
 
 
@@ -35,5 +36,13 @@ def test_missing_file_raises(tmp_path):
 def test_garbage_file_raises(tmp_path):
     p = tmp_path / "junk.wav"
     p.write_bytes(b"not a wav at all")
+    with pytest.raises(AudioLoadError):
+        load_analysis_audio(p)
+
+
+def test_empty_audio_raises(tmp_path):
+    # ヘッダは正しいが中身が0フレームの WAV
+    p = tmp_path / "empty.wav"
+    sf.write(str(p), np.zeros((0,), dtype=np.float32), 22050)
     with pytest.raises(AudioLoadError):
         load_analysis_audio(p)
