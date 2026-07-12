@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BeatMarks — エディタ画面モックアップ</title>
+<style>
+  :root{
+    --bg:#0d0f13; --panel:#14171c; --panel2:#191d24; --panel3:#1f242d;
+    --border:#262c36; --text:#e8ebf0; --dim:#8b94a3; --faint:#5a6272;
+    --accent:#ff4d6b; --amber:#ffd166;
+    --sec-intro:#5b7fd4; --sec-a:#38a3a5; --sec-b:#f4a259; --sec-cho:#e4547c;
+    --sec-inst:#8d78d9; --sec-bridge:#b56fd0; --sec-out:#6b7686;
+    --hit-low:#ff7847; --hit-mid:#ffd166; --hit-high:#5ad1e6;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:"Hiragino Sans","Noto Sans JP",-apple-system,"Segoe UI",sans-serif;
+    font-size:12px; display:flex; flex-direction:column; overflow:hidden; min-width:980px;
+  }
+  .mono{font-family:"SF Mono","Cascadia Code",Menlo,Consolas,monospace;}
+
+  /* ---------- header ---------- */
+  header{
+    display:flex; align-items:center; gap:12px; padding:8px 14px;
+    background:var(--panel); border-bottom:1px solid var(--border); flex:none;
+  }
+  .logo{font-weight:800; font-size:14px; letter-spacing:.4px;}
+  .logo em{color:var(--accent); font-style:normal;}
+  .logo small{color:var(--faint); font-weight:400; margin-left:6px;}
+  .filechip{
+    display:flex; align-items:center; gap:8px; background:var(--panel2);
+    border:1px solid var(--border); border-radius:6px; padding:5px 10px; color:var(--dim);
+  }
+  .filechip b{color:var(--text); font-weight:600;}
+  .status{
+    margin-left:auto; display:flex; align-items:center; gap:6px; color:#7ddc9a; font-weight:600;
+  }
+  .status .dot{width:7px;height:7px;border-radius:50%;background:#7ddc9a;}
+  .status small{color:var(--faint); font-weight:400;}
+
+  /* ---------- toolbars ---------- */
+  .toolbar{
+    display:flex; align-items:center; gap:10px; padding:7px 14px;
+    background:var(--panel); border-bottom:1px solid var(--border); flex:none; flex-wrap:nowrap;
+  }
+  .group{
+    display:flex; align-items:center; gap:6px; background:var(--panel2);
+    border:1px solid var(--border); border-radius:8px; padding:4px 8px;
+  }
+  .group .glabel{color:var(--faint); font-size:10px; margin-right:2px; white-space:nowrap;}
+  button{
+    background:var(--panel3); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:4px 9px; font-size:11px; cursor:pointer; white-space:nowrap;
+  }
+  button:hover{border-color:#3a4250;}
+  button.primary{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700;}
+  button.toggled{background:#2a3140; border-color:var(--amber); color:var(--amber);}
+  button.icon{width:30px; text-align:center; padding:4px 0; font-size:12px;}
+  .tc{
+    font-size:16px; font-weight:600; letter-spacing:1px; color:var(--text);
+    background:#0a0c10; border:1px solid var(--border); border-radius:6px; padding:4px 12px;
+  }
+  .tc small{color:var(--faint); font-size:10px; letter-spacing:0; margin-left:6px;}
+  .bigval{font-size:15px; font-weight:700;}
+  .chip{background:var(--panel3); border:1px solid var(--border); border-radius:6px; padding:3px 8px; color:var(--text);}
+  .chip b{font-weight:700;}
+  .keychip b{color:#9ecbff;}
+  .zoom{display:flex; align-items:center; gap:6px; margin-left:auto; color:var(--faint);}
+  input[type=range]{accent-color:var(--accent); width:110px;}
+
+  /* ---------- annotations ---------- */
+  .anno{
+    position:absolute; z-index:40; background:rgba(35,28,8,.92); border:1px dashed var(--amber);
+    color:var(--amber); font-size:10px; padding:3px 7px; border-radius:5px; pointer-events:none;
+    max-width:220px; line-height:1.5;
+  }
+  body.no-anno .anno{display:none;}
+
+  /* ---------- overview ---------- */
+  .overview{position:relative; flex:none; background:var(--panel); border-bottom:1px solid var(--border); padding:6px 14px 4px;}
+  .overview canvas{width:100%; height:44px; display:block; border-radius:4px;}
+
+  /* ---------- main wave area ---------- */
+  .wavezone{position:relative; flex:1 1 auto; min-height:230px; display:flex; flex-direction:column; background:var(--bg); overflow:hidden;}
+  .sectionlane{position:relative; flex:none; height:26px; margin:6px 14px 0;}
+  .sec{
+    position:absolute; top:0; height:100%; border-radius:5px 5px 0 0; display:flex; align-items:center;
+    padding:0 8px; font-weight:700; font-size:11px; color:#fff; overflow:hidden; white-space:nowrap; cursor:grab;
+  }
+  .sec small{font-weight:400; opacity:.8; margin-left:6px;}
+  .sec .handle{
+    position:absolute; right:-1px; top:0; bottom:0; width:7px; cursor:col-resize;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.55)); border-radius:0 4px 0 0;
+  }
+  .maincanvas{flex:1 1 auto; margin:0 14px; position:relative;}
+  .maincanvas canvas{position:absolute; inset:0; width:100%; height:100%;}
+  .hitlane{flex:none; height:40px; margin:0 14px 8px; position:relative; border-top:1px solid var(--border);}
+  .hitlane canvas{position:absolute; inset:0; width:100%; height:100%;}
+  .hitctl{
+    position:absolute; right:6px; top:5px; display:flex; gap:8px; align-items:center;
+    background:rgba(20,23,28,.9); border:1px solid var(--border); border-radius:6px; padding:3px 8px; z-index:5;
+  }
+  .hitctl .lg{display:flex; align-items:center; gap:3px; color:var(--dim); font-size:10px;}
+  .swatch{width:8px; height:8px; border-radius:2px;}
+  .lanetag{
+    position:absolute; left:6px; top:5px; color:var(--faint); font-size:10px; z-index:5;
+    background:rgba(20,23,28,.8); padding:2px 6px; border-radius:4px;
+  }
+
+  /* ---------- bottom ---------- */
+  .bottom{flex:none; height:238px; display:flex; border-top:1px solid var(--border); background:var(--panel);}
+  .markers{flex:1 1 auto; display:flex; flex-direction:column; border-right:1px solid var(--border); min-width:0;}
+  .paneltitle{
+    flex:none; display:flex; align-items:center; gap:8px; padding:8px 12px; font-weight:700; font-size:12px;
+    border-bottom:1px solid var(--border); color:var(--text);
+  }
+  .paneltitle .count{color:var(--faint); font-weight:400;}
+  .paneltitle .filters{margin-left:auto; display:flex; gap:4px;}
+  .filters button{font-size:10px; padding:2px 7px; border-radius:10px;}
+  .filters button.on{border-color:var(--accent); color:var(--accent);}
+  .tablewrap{flex:1; overflow:auto;}
+  table{width:100%; border-collapse:collapse;}
+  th{
+    text-align:left; color:var(--faint); font-weight:600; font-size:10px; padding:5px 12px;
+    border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--panel);
+  }
+  td{padding:5px 12px; border-bottom:1px solid #1c212a; color:var(--dim);}
+  tr:hover td{background:#1a1f28; cursor:pointer;}
+  tr.sel td{background:#232b3a;}
+  td .type{display:inline-flex; align-items:center; gap:5px; color:var(--text); font-weight:600;}
+  td .tdot{width:8px; height:8px; border-radius:2px; display:inline-block;}
+  td.mono, th.mono{font-family:"SF Mono",Menlo,Consolas,monospace;}
+  .src-auto{color:var(--faint);} .src-user{color:var(--amber); font-weight:700;}
+
+  .export{flex:none; width:330px; display:flex; flex-direction:column;}
+  .exbody{flex:1; overflow:auto; padding:10px 12px; display:flex; flex-direction:column; gap:10px;}
+  .exrow{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .exrow label{color:var(--dim); font-size:11px;}
+  select{
+    background:var(--panel3); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 6px; font-size:11px;
+  }
+  .checks{display:flex; gap:10px; flex-wrap:wrap; color:var(--text);}
+  .checks label{display:flex; gap:4px; align-items:center; font-size:11px; color:var(--text); cursor:pointer;}
+  .targets{display:grid; grid-template-columns:repeat(3,1fr); gap:6px;}
+  .target{
+    border:1px solid var(--border); background:var(--panel2); border-radius:8px; padding:7px 4px;
+    text-align:center; cursor:pointer; position:relative;
+  }
+  .target:hover{border-color:#3a4250;}
+  .target.on{border-color:var(--accent); background:#241a20;}
+  .target b{display:block; font-size:11px;}
+  .target small{color:var(--faint); font-size:9px;}
+  .target.p2{opacity:.42; cursor:default;}
+  .badge{
+    position:absolute; top:-6px; right:-4px; font-size:8px; background:#333a46; color:var(--dim);
+    border-radius:6px; padding:1px 5px;
+  }
+  .exfoot{flex:none; padding:10px 12px; border-top:1px solid var(--border); display:flex; gap:8px; align-items:center;}
+  .exfoot .primary{flex:1; padding:9px; font-size:13px;}
+  .exfoot .note{color:var(--faint); font-size:9px; width:110px; line-height:1.4;}
+
+  footer{
+    flex:none; display:flex; gap:14px; align-items:center; padding:5px 14px;
+    background:var(--panel); border-top:1px solid var(--border); color:var(--faint); font-size:10px;
+  }
+  kbd{
+    background:var(--panel3); border:1px solid var(--border); border-bottom-width:2px; border-radius:4px;
+    padding:1px 5px; font-size:9px; color:var(--text);
+  }
+  footer .right{margin-left:auto; display:flex; gap:8px; align-items:center;}
+  footer .mock{color:var(--amber);}
+</style>
+</head>
+<body>
+
+  <!-- ═══════════ ヘッダー ═══════════ -->
+  <header>
+    <div class="logo">Beat<em>Marks</em><small>(仮称)· モックアップ</small></div>
+    <div class="filechip">🎬 <b>MV_final_v3.mp4</b> <span>→ 音声抽出済み · 03:30 · 48kHz</span></div>
+    <div class="status"><span class="dot"></span>解析完了 <small>(12.4秒 · 標準エンジン)</small></div>
+  </header>
+
+  <!-- ═══════════ ツールバー1: トランスポート ═══════════ -->
+  <div class="toolbar">
+    <div class="group">
+      <button class="icon">⏮</button>
+      <button class="icon primary">▶</button>
+      <button class="icon" title="ループ">🔁</button>
+    </div>
+    <div class="tc mono">00:01:00:00<small>@ 30fps 表示</small></div>
+    <div class="group" style="position:relative;">
+      <span class="glabel">確認</span>
+      <button class="toggled">🔔 メトロノーム</button>
+      <button>タップテンポ</button>
+    </div>
+    <div class="group">
+      <span class="glabel">追加</span>
+      <button>◈ 手動マーカー <kbd>M</kbd></button>
+    </div>
+    <div class="zoom">
+      <span>ズーム</span><input type="range" min="0" max="100" value="62">
+      <span class="mono">24s表示</span>
+    </div>
+  </div>
+
+  <!-- ═══════════ ツールバー2: グリッド・キー補正 ═══════════ -->
+  <div class="toolbar" style="position:relative;">
+    <div class="group">
+      <span class="glabel">BPM</span>
+      <span class="bigval mono">128.00</span>
+      <span class="chip" style="color:#7ddc9a; font-size:10px;">固定</span>
+      <button>½</button><button>×2</button>
+    </div>
+    <div class="group">
+      <span class="glabel">グリッドオフセット</span>
+      <button>−10ms</button><button>−1ms</button>
+      <span class="mono" style="color:var(--amber); min-width:52px; text-align:center;">+23ms</span>
+      <button>+1ms</button><button>+10ms</button>
+    </div>
+    <div class="group">
+      <span class="glabel">拍子</span>
+      <select><option>4/4</option><option>3/4</option><option>6/8</option></select>
+      <button title="小節頭を1拍ずらす">1拍目 ←</button><button>→</button>
+    </div>
+    <div class="chip keychip">KEY <b>E minor</b> · 9A <span style="color:var(--faint)">(信頼度 0.86)</span></div>
+    <div class="chip" style="color:var(--dim);">セクション別: サビ=G major</div>
+    <div class="anno" style="right:10px; top:44px;">💡 メトロノーム音を重ねて再生し、グリッドのズレを耳で確認 → オフセットで微調整</div>
+  </div>
+
+  <!-- ═══════════ オーバービュー(曲全体) ═══════════ -->
+  <div class="overview">
+    <canvas id="ov"></canvas>
+    <div class="anno" style="left:180px; top:2px;">曲全体。ドラッグで表示範囲を移動</div>
+  </div>
+
+  <!-- ═══════════ メイン波形ゾーン ═══════════ -->
+  <div class="wavezone">
+    <div class="sectionlane" id="seclane"></div>
+    <div class="anno" style="left:46%; top:34px;">セクション境界: ドラッグで移動 / ダブルクリックでリネーム / 右クリックで分割・結合</div>
+    <div class="maincanvas"><canvas id="main"></canvas></div>
+    <div class="hitlane">
+      <span class="lanetag">ヒット検出レーン</span>
+      <canvas id="hits"></canvas>
+      <div class="hitctl">
+        <span class="lg"><span class="swatch" style="background:var(--hit-low)"></span>低域</span>
+        <span class="lg"><span class="swatch" style="background:var(--hit-mid)"></span>中域</span>
+        <span class="lg"><span class="swatch" style="background:var(--hit-high)"></span>高域</span>
+        <span class="lg">感度 <input type="range" min="0" max="100" value="55" style="width:70px;"></span>
+      </div>
+      <div class="anno" style="right:250px; bottom:44px;">しきい値は再解析なしで即反映</div>
+    </div>
+  </div>
+
+  <!-- ═══════════ 下部: マーカー一覧 + エクスポート ═══════════ -->
+  <div class="bottom">
+    <div class="markers">
+      <div class="paneltitle">マーカー一覧 <span class="count">全 486 件(表示 6 件)</span>
+        <div class="filters">
+          <button class="on">セクション</button><button class="on">小節</button>
+          <button>拍</button><button class="on">ヒット</button><button class="on">手動</button>
+        </div>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr>
+            <th>種別</th><th>ラベル</th><th class="mono">タイムコード</th>
+            <th class="mono">フレーム@30</th><th class="mono">秒</th><th>出所</th>
+          </tr></thead>
+          <tbody>
+            <tr><td><span class="type"><span class="tdot" style="background:var(--sec-b)"></span>セクション</span></td><td>Bメロ</td><td class="mono">00:00:45:00</td><td class="mono">1350</td><td class="mono">45.000</td><td class="src-auto">自動</td></tr>
+            <tr class="sel"><td><span class="type"><span class="tdot" style="background:var(--sec-cho)"></span>セクション</span></td><td>サビ 1 ★</td><td class="mono">00:01:00:00</td><td class="mono">1800</td><td class="mono">60.000</td><td class="src-auto">自動</td></tr>
+            <tr><td><span class="type"><span class="tdot" style="background:#697489"></span>小節</span></td><td>33</td><td class="mono">00:01:00:00</td><td class="mono">1800</td><td class="mono">60.000</td><td class="src-auto">自動</td></tr>
+            <tr><td><span class="type"><span class="tdot" style="background:var(--hit-low)"></span>ヒット(低)</span></td><td>強度 0.92</td><td class="mono">00:01:00:01</td><td class="mono">1801</td><td class="mono">60.023</td><td class="src-auto">自動</td></tr>
+            <tr><td><span class="type"><span class="tdot" style="background:var(--amber)"></span>手動</span></td><td>カメラフラッシュ ✎</td><td class="mono">00:01:07:14</td><td class="mono">2114</td><td class="mono">70.467</td><td class="src-user">手動</td></tr>
+            <tr><td><span class="type"><span class="tdot" style="background:var(--sec-inst)"></span>セクション</span></td><td>間奏</td><td class="mono">00:01:30:00</td><td class="mono">2700</td><td class="mono">90.000</td><td class="src-auto">自動</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="export">
+      <div class="paneltitle">書き出し</div>
+      <div class="exbody">
+        <div class="exrow">
+          <label>フレームレート</label>
+          <select><option>23.976</option><option>24</option><option>25</option><option>29.97</option><option selected>30</option><option>50</option><option>59.94</option><option>60</option><option>カスタム…</option></select>
+          <label>丸め</label>
+          <select><option>最近傍</option><option>切り捨て</option></select>
+        </div>
+        <div class="exrow">
+          <label style="width:100%;">含めるマーカー:</label>
+          <div class="checks">
+            <label><input type="checkbox" checked>セクション</label>
+            <label><input type="checkbox" checked>小節</label>
+            <label><input type="checkbox">拍</label>
+            <label><input type="checkbox" checked>ヒット(低のみ)</label>
+            <label><input type="checkbox" checked>手動</label>
+            <label><input type="checkbox" checked>エンベロープ</label>
+          </div>
+        </div>
+        <div class="exrow"><label style="width:100%;">書き出し先(複数可):</label></div>
+        <div class="targets">
+          <div class="target on"><b>After Effects</b><small>.jsx</small></div>
+          <div class="target"><b>Premiere</b><small>FCP XML</small></div>
+          <div class="target on"><b>Resolve</b><small>マーカーEDL</small></div>
+          <div class="target"><b>Blender</b><small>.py</small></div>
+          <div class="target"><b>JSON</b><small>正規形式</small></div>
+          <div class="target"><b>CSV / MIDI</b><small>汎用</small></div>
+          <div class="target p2"><b>C4D</b><small>.py</small><span class="badge">Phase2</span></div>
+          <div class="target p2"><b>Houdini</b><small>.py</small><span class="badge">Phase2</span></div>
+          <div class="target p2"><b>Maya / Max</b><small>.py/.ms</small><span class="badge">Phase2</span></div>
+          <div class="target p2"><b>Unity</b><small>.cs+JSON</small><span class="badge">Phase2</span></div>
+          <div class="target p2"><b>Unreal</b><small>.py</small><span class="badge">Phase2</span></div>
+        </div>
+      </div>
+      <div class="exfoot">
+        <button class="primary">⬇ 書き出し(2ファイル)</button>
+        <div class="note">AE: コンポマーカー+エンベロープをヌルに焼き込み</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span><kbd>Space</kbd> 再生/停止</span>
+    <span><kbd>M</kbd> マーカー追加</span>
+    <span><kbd>←</kbd><kbd>→</kbd> 拍単位シーク</span>
+    <span><kbd>⌘Z</kbd> 取り消し</span>
+    <span><kbd>1〜4</kbd> レーン表示切替</span>
+    <div class="right">
+      <button onclick="document.body.classList.toggle('no-anno')" style="font-size:10px;">💡 注釈 ON/OFF</button>
+      <span class="mock">※静的モックアップ — 波形・数値はダミーです</span>
+    </div>
+  </footer>
+
+<script>
+/* ══════════════ ダミーデータ ══════════════ */
+const DUR = 210;                      // 曲の長さ(秒)
+const BPM = 128, BEAT = 60/BPM, BAR = BEAT*4;
+const VIEW = {t0: 50, t1: 74};        // メインビューの表示範囲(秒)
+const PLAY = 60;                      // 再生ヘッド位置(サビ頭)
+
+const SECTIONS = [
+  {n:'イントロ',  s:0,   e:15,  c:'#5b7fd4'},
+  {n:'Aメロ',     s:15,  e:45,  c:'#38a3a5'},
+  {n:'Bメロ',     s:45,  e:60,  c:'#f4a259'},
+  {n:'サビ 1 ★',  s:60,  e:90,  c:'#e4547c'},
+  {n:'間奏',      s:90,  e:105, c:'#8d78d9'},
+  {n:'Aメロ 2',   s:105, e:135, c:'#38a3a5'},
+  {n:'サビ 2 ★',  s:135, e:165, c:'#e4547c'},
+  {n:'ブリッジ',  s:165, e:180, c:'#b56fd0'},
+  {n:'大サビ ★',  s:180, e:200, c:'#e4547c'},
+  {n:'アウトロ',  s:200, e:210, c:'#6b7686'},
+];
+const AMP = {'イントロ':.34,'Aメロ':.55,'Bメロ':.62,'サビ 1 ★':.92,'間奏':.48,'Aメロ 2':.57,'サビ 2 ★':.94,'ブリッジ':.42,'大サビ ★':1.0,'アウトロ':.30};
+
+function secAt(t){ return SECTIONS.find(s=>t>=s.s&&t<s.e) || SECTIONS[SECTIONS.length-1]; }
+function h(seed){ const x=Math.sin(seed*127.1+311.7)*43758.5453; return x-Math.floor(x); } // 決定的擬似乱数
+
+/* 波形エンベロープ(それっぽく) */
+function env(t){
+  const base = AMP[secAt(t).n] || .5;
+  const beatPhase = (t%BEAT)/BEAT;
+  const pump = Math.pow(1-beatPhase,1.6)*.35+.65;         // 拍頭で持ち上がる
+  const wob = .82+.18*Math.sin(t*2.1)+.08*Math.sin(t*9.7);
+  const nz  = .85+.3*h(Math.floor(t*50));
+  return Math.min(1, base*pump*wob*nz);
+}
+
+function setupCanvas(cv){
+  const r = cv.getBoundingClientRect(), dpr = devicePixelRatio||1;
+  cv.width = r.width*dpr; cv.height = r.height*dpr;
+  const ctx = cv.getContext('2d'); ctx.scale(dpr,dpr);
+  return [ctx, r.width, r.height];
+}
+
+/* ══════════════ オーバービュー ══════════════ */
+function drawOverview(){
+  const [ctx,W,H] = setupCanvas(document.getElementById('ov'));
+  const x = t=>t/DUR*W;
+  SECTIONS.forEach(s=>{ ctx.fillStyle=s.c+'26'; ctx.fillRect(x(s.s),0,x(s.e)-x(s.s),H);
+                        ctx.fillStyle=s.c;      ctx.fillRect(x(s.s),0,x(s.e)-x(s.s),4); });
+  ctx.strokeStyle='#aeb8c9'; ctx.lineWidth=1; ctx.beginPath();
+  for(let px=0;px<W;px++){ const a=env(px/W*DUR)*(H/2-8);
+    ctx.moveTo(px+.5,H/2+4-a); ctx.lineTo(px+.5,H/2+4+a); }
+  ctx.globalAlpha=.55; ctx.stroke(); ctx.globalAlpha=1;
+  ctx.strokeStyle='#ffffff'; ctx.lineWidth=1.5;
+  ctx.strokeRect(x(VIEW.t0)+.5,1,x(VIEW.t1)-x(VIEW.t0),H-2);   // 表示窓
+  ctx.fillStyle='#ff4d6b'; ctx.fillRect(x(PLAY)-.75,0,1.5,H);  // 再生ヘッド
+}
+
+/* ══════════════ セクション帯(DOM) ══════════════ */
+function buildSecLane(){
+  const lane = document.getElementById('seclane');
+  const W = lane.getBoundingClientRect().width;
+  const x = t=>(t-VIEW.t0)/(VIEW.t1-VIEW.t0)*W;
+  SECTIONS.filter(s=>s.e>VIEW.t0&&s.s<VIEW.t1).forEach(s=>{
+    const el=document.createElement('div'); el.className='sec';
+    const l=Math.max(0,x(s.s)), r=Math.min(W,x(s.e));
+    el.style.left=l+'px'; el.style.width=(r-l)+'px'; el.style.background=s.c;
+    const bars=Math.round((s.e-s.s)/BAR);
+    el.innerHTML=`${s.n}<small>${bars}小節</small>`+(r<W?'<span class="handle"></span>':'');
+    el.title='ダブルクリックでリネーム / 境界ドラッグで移動';
+    lane.appendChild(el);
+  });
+}
+
+/* ══════════════ メイン波形 ══════════════ */
+function drawMain(){
+  const [ctx,W,H] = setupCanvas(document.getElementById('main'));
+  const x = t=>(t-VIEW.t0)/(VIEW.t1-VIEW.t0)*W;
+  const GRID_OFF = .023;   // グリッドオフセット +23ms(補正デモ)
+
+  SECTIONS.forEach(s=>{ const l=Math.max(0,x(Math.max(s.s,VIEW.t0))), r=Math.min(W,x(Math.min(s.e,VIEW.t1)));
+    if(r>l){ ctx.fillStyle=s.c+'14'; ctx.fillRect(l,0,r-l,H); }});
+
+  const firstBeat = Math.ceil((VIEW.t0-GRID_OFF)/BEAT);
+  const lastBeat  = Math.floor((VIEW.t1-GRID_OFF)/BEAT);
+  ctx.textBaseline='top'; ctx.font='9px Menlo, monospace';
+  for(let b=firstBeat;b<=lastBeat;b++){
+    const t=b*BEAT+GRID_OFF, isBar=b%4===0, px=Math.round(x(t))+.5;
+    ctx.strokeStyle = isBar ? '#4a5468' : '#2a3140';
+    ctx.lineWidth = isBar ? 1.4 : 1;
+    ctx.beginPath(); ctx.moveTo(px, isBar?14:22); ctx.lineTo(px,H); ctx.stroke();
+    if(isBar){ ctx.fillStyle='#68738a'; ctx.fillText(String(b/4+1), px+3, 3); }
+  }
+  SECTIONS.forEach(s=>{ if(s.s>VIEW.t0&&s.s<VIEW.t1){ const px=Math.round(x(s.s))+.5;
+    ctx.strokeStyle=s.c; ctx.lineWidth=2; ctx.setLineDash([5,3]);
+    ctx.beginPath(); ctx.moveTo(px,0); ctx.lineTo(px,H); ctx.stroke(); ctx.setLineDash([]); }});
+
+  ctx.beginPath();
+  for(let px=0;px<W;px++){ const t=VIEW.t0+px/W*(VIEW.t1-VIEW.t0), a=env(t)*(H/2-16);
+    ctx.moveTo(px+.5,H/2-a); ctx.lineTo(px+.5,H/2+a); }
+  ctx.strokeStyle='#9ecbff'; ctx.globalAlpha=.75; ctx.lineWidth=1; ctx.stroke(); ctx.globalAlpha=1;
+
+  const mkT=70.467, mp=x(mkT);                    // 手動マーカー
+  ctx.fillStyle='#ffd166';
+  ctx.beginPath(); ctx.moveTo(mp,10); ctx.lineTo(mp-5,2); ctx.lineTo(mp+5,2); ctx.closePath(); ctx.fill();
+  ctx.fillRect(mp-.75,10,1.5,H-10);
+  ctx.font='9px sans-serif'; ctx.fillText('カメラフラッシュ',mp+7,6);
+
+  const pp=x(PLAY);                                // 再生ヘッド
+  ctx.fillStyle='#ff4d6b'; ctx.fillRect(pp-1,0,2,H);
+  ctx.beginPath(); ctx.moveTo(pp,0); ctx.lineTo(pp-6,0); ctx.lineTo(pp,10); ctx.lineTo(pp+6,0); ctx.closePath(); ctx.fill();
+}
+
+/* ══════════════ ヒットレーン ══════════════ */
+function drawHits(){
+  const [ctx,W,H] = setupCanvas(document.getElementById('hits'));
+  const x = t=>(t-VIEW.t0)/(VIEW.t1-VIEW.t0)*W;
+  const bands=[{c:'#ff7847',y:H*.30},{c:'#ffd166',y:H*.55},{c:'#5ad1e6',y:H*.80}];
+  const firstBeat=Math.ceil(VIEW.t0/BEAT), lastBeat=Math.floor(VIEW.t1/BEAT);
+  for(let b=firstBeat;b<=lastBeat;b++){
+    const t=b*BEAT+.023, dens=AMP[secAt(t).n]||.5;
+    bands.forEach((bd,bi)=>{
+      const roll=h(b*3.7+bi*13.3), sub=h(b*7.1+bi*29+1);
+      if(roll < dens*(bi===0?.9:bi===1?.6:.75)){
+        const jitter=(sub-.5)*.06, px=x(t+jitter), strength=.4+.6*h(b*11+bi);
+        ctx.fillStyle=bd.c; ctx.globalAlpha=.35+.65*strength;
+        const r=2+strength*2.6;
+        ctx.beginPath(); ctx.moveTo(px,bd.y-r); ctx.lineTo(px+r,bd.y); ctx.lineTo(px,bd.y+r); ctx.lineTo(px-r,bd.y); ctx.closePath(); ctx.fill();
+      }});
+  }
+  ctx.globalAlpha=1; ctx.fillStyle='#ff4d6b'; ctx.fillRect(x(PLAY)-1,0,2,H);
+}
+
+function renderAll(){
+  document.getElementById('seclane').innerHTML='';
+  drawOverview(); buildSecLane(); drawMain(); drawHits();
+}
+renderAll();
+addEventListener('resize', renderAll);
+</script>
+</body>
+</html>
