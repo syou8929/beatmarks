@@ -332,6 +332,11 @@ export interface EngineResult {
   warnings: string[];
 }
 
+/** セクション編集操作。
+ *  index の規則(重要): move/rename/recolor/delete の index は「元の
+ *  analysis.sections の添字」を指す。add で増えた分は
+ *  index = 元の sections の長さ + 追加順(0起点) で参照する。
+ *  適用順序やソートで添字が変わっても、常にこの「元添字」で指す。 */
 export type SectionEdit =
   | { op: "move"; index: number; startSec: number }
   | { op: "rename"; index: number; label: string }
@@ -377,6 +382,8 @@ import type { AnalysisResult, EditState, EngineResult } from "./types.js";
 
 export class ValidationError extends Error {}
 
+/** fail() は常に throw する(never)。以降の型ナローイングがこの性質に依存して
+ *  いるため、ログして続行する実装に変えてはならない。 */
 function fail(msg: string): never {
   throw new ValidationError(`engine result invalid: ${msg}`);
 }
