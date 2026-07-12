@@ -2248,7 +2248,8 @@ describe("exportAeJsx", () => {
   it("ES3構文として妥当(node --checkが通る)", () => {
     const code = exportAeJsx(MARKERS, ctx());
     const dir = mkdtempSync(join(tmpdir(), "bmjsx-"));
-    const file = join(dir, "out.jsx");
+    // Node 22 の --check は .js/.mjs/.cjs 以外の拡張子を拒否するため .js で検査する
+    const file = join(dir, "out.js");
     writeFileSync(file, code, "utf-8");
     expect(() => execFileSync(process.execPath, ["--check", file])).not.toThrow();
   });
@@ -3557,7 +3558,7 @@ cd /home/claude/beatmarks/app
 UPDATE_GOLDEN=1 npx vitest run src/shared/__tests__/integration-golden.test.ts
 npx vitest run src/shared/__tests__/integration-golden.test.ts
 ls src/shared/__tests__/golden/
-node --check src/shared/__tests__/golden/aejsx-30.jsx && echo "aejsx golden: syntax OK"
+cp src/shared/__tests__/golden/aejsx-30.jsx /tmp/aejsx-check.js && node --check /tmp/aejsx-check.js && echo "aejsx golden: syntax OK"
 ```
 
 Expected: 1回目で golden/ に **21 ファイル**(テキスト 9 種×2fps=18 + midi の sha256×2 + wavcues の sha256×1)が生成され、2回目は全テスト passed。`node --check` が通る(エンベロープ焼き込み込みの実サイズ .jsx が構文的に妥当である確認)
