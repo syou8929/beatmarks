@@ -103,4 +103,30 @@ describe("exportAeJsx", () => {
     expect(code).toContain("File.openDialog");
     expect(code).toContain("new ImportOptions");
   });
+
+  it("丸めで同フレームに衝突しても優先度の高い種別が残る", () => {
+    const collide: Marker[] = [
+      { id: "h", sourceId: "s", timeSec: 0.26, type: "hit", label: "low",
+        color: "#ff7847", source: "auto", meta: { strength: 0.9, band: "low" } },
+      { id: "b", sourceId: "s", timeSec: 0.27, type: "bar", label: "小節1",
+        color: "#e8ebf0", source: "auto", meta: { barNumber: 1 } },
+    ];
+    // どちらも frame 8 (round(0.26*30)=round(0.27*30)=8) → bar(優先度1)が勝つ
+    const code = exportAeJsx(collide, ctx());
+    const pushes = code.match(/BM_MARKERS\.push/g) ?? [];
+    expect(pushes).toHaveLength(1);
+    expect(code).toContain("\\u5c0f\\u7bc0"); // 「小節」= barのラベル
+    expect(code).not.toContain("'low'");
+  });
+
+  it("レイヤーマーカーは文書化されたaudioLayer.markerを使う", () => {
+    const code = exportAeJsx(MARKERS, ctx());
+    expect(code).toContain("audioLayer.marker;");
+    expect(code).not.toContain("property('Marker')");
+  });
+
+  it("生成コードは\\uエスケープ外の非ASCIIを含まない", () => {
+    const code = exportAeJsx(MARKERS, ctx());
+    expect(/[^\x00-\x7f]/.test(code)).toBe(false);
+  });
 });
