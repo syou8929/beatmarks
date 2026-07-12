@@ -8,15 +8,53 @@ import { ExportError, selectMarkers } from "./helpers.js";
 const enc = new TextEncoder();
 
 class ByteWriter {
-  private parts: number[] = [];
-  ascii(s: string) { for (const c of s) this.parts.push(c.charCodeAt(0)); }
-  u16(v: number) { this.parts.push(v & 0xff, (v >> 8) & 0xff); }
-  u32(v: number) {
-    this.parts.push(v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >>> 24) & 0xff);
+  private buf = new Uint8Array(1024);
+  private len = 0;
+
+  private ensure(extra: number): void {
+    if (this.len + extra <= this.buf.length) return;
+    let cap = this.buf.length * 2;
+    while (cap < this.len + extra) cap *= 2;
+    const next = new Uint8Array(cap);
+    next.set(this.buf.subarray(0, this.len));
+    this.buf = next;
   }
-  bytes(b: Uint8Array | number[]) { for (const x of b) this.parts.push(x); }
-  get length(): number { return this.parts.length; }
-  out(): Uint8Array { return new Uint8Array(this.parts); }
+
+  ascii(s: string) {
+    this.ensure(s.length);
+    for (let i = 0; i < s.length; i++) this.buf[this.len++] = s.charCodeAt(i) & 0xff;
+  }
+  u16(v: number) {
+    this.ensure(2);
+    this.buf[this.len++] = v & 0xff;
+    this.buf[this.len++] = (v >> 8) & 0xff;
+  }
+  u32(v: number) {
+    this.ensure(4);
+    this.buf[this.len++] = v & 0xff;
+    this.buf[this.len++] = (v >> 8) & 0xff;
+    this.buf[this.len++] = (v >> 16) & 0xff;
+    this.buf[this.len++] = (v >>> 24) & 0xff;
+  }
+  bytes(b: Uint8Array | number[]) {
+    if (b instanceof Uint8Array) {
+      this.ensure(b.length);
+      this.buf.set(b, this.len);      // バルクコピー(要素pushしない)
+      this.len += b.length;
+    } else {
+      this.ensure(b.length);
+      for (const x of b) this.buf[this.len++] = x & 0xff;
+    }
+  }
+  /** 後からサイズを書き戻す(RIFFヘッダ用) */
+  patchU32(offset: number, v: number) {
+    this.buf[offset] = v & 0xff;
+    this.buf[offset + 1] = (v >> 8) & 0xff;
+    this.buf[offset + 2] = (v >> 16) & 0xff;
+    this.buf[offset + 3] = (v >>> 24) & 0xff;
+  }
+  get length(): number { return this.len; }
+  out(): Uint8Array { return this.buf.slice(0, this.len); }
 }
 
 interface RawChunk { id: string; body: Uint8Array }
@@ -102,30 +140,27 @@ export function embedWavCues(
     }
   });
 
-  // 再構築
-  const out = new ByteWriter();
-  out.ascii("WAVE");
+  // 再構築(単一の writer に直接書く。out→file の二重ラップを排除)
+  const w = new ByteWriter();
+  w.ascii("RIFF");
+  w.u32(0); // 後でpatch
+  w.ascii("WAVE");
   for (const c of keep) {
-    out.ascii(c.id);
-    out.u32(c.body.length);
-    out.bytes(c.body);
-    if (c.body.length % 2 === 1) out.bytes([0]); // 奇数長チャンクは偶数へパディング
+    w.ascii(c.id);
+    w.u32(c.body.length);
+    w.bytes(c.body);
+    if (c.body.length % 2 === 1) w.bytes([0]); // 奇数長チャンクは偶数へパディング
   }
   const cueBody = cue.out();
-  out.ascii("cue ");
-  out.u32(cueBody.length);
-  out.bytes(cueBody);
-  if (cueBody.length % 2 === 1) out.bytes([0]);
+  w.ascii("cue ");
+  w.u32(cueBody.length);
+  w.bytes(cueBody);
+  if (cueBody.length % 2 === 1) w.bytes([0]);
   const adtlBody = adtl.out();
-  out.ascii("LIST");
-  out.u32(adtlBody.length);
-  out.bytes(adtlBody);
-  if (adtlBody.length % 2 === 1) out.bytes([0]);
-
-  const riffBody = out.out();
-  const file = new ByteWriter();
-  file.ascii("RIFF");
-  file.u32(riffBody.length);
-  file.bytes(riffBody);
-  return file.out();
+  w.ascii("LIST");
+  w.u32(adtlBody.length);
+  w.bytes(adtlBody);
+  if (adtlBody.length % 2 === 1) w.bytes([0]);
+  w.patchU32(4, w.length - 8);
+  return w.out();
 }

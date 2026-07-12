@@ -122,4 +122,42 @@ describe("embedWavCues", () => {
     const notWave = new Uint8Array([...ascii("RIFF"), ...u32le(4), ...ascii("AVI ")]);
     expect(() => embedWavCues(notWave, MARKERS, ctx())).toThrow(ExportError);
   });
+
+  it("奇数長の未知チャンクがパディング込みで無傷に往復する", () => {
+    // fmtとdataの間に5バイトの'junk'チャンク(奇数長→1バイトパディング)を挟む
+    const base = makeWav(1000);
+    const cs = chunks(base);
+    const fmtEnd = cs.find((c) => c.id === "fmt ")!.start + 16;
+    const junk = [...ascii("junk"), ...u32le(5), 1, 2, 3, 4, 5, 0]; // 実体5+pad1
+    const withJunk = new Uint8Array([
+      ...base.slice(0, fmtEnd), ...junk, ...base.slice(fmtEnd),
+    ]);
+    // RIFFサイズを増分修正
+    const dv0 = new DataView(withJunk.buffer);
+    dv0.setUint32(4, withJunk.length - 8, true);
+    const out = embedWavCues(withJunk, MARKERS, ctx());
+    const outChunks = chunks(out);
+    const junkOut = outChunks.find((c) => c.id === "junk")!;
+    expect(junkOut).toBeDefined();
+    expect(junkOut.size).toBe(5);
+    expect([...out.slice(junkOut.start, junkOut.start + 5)]).toEqual([1, 2, 3, 4, 5]);
+    expect(out.length % 2).toBe(0);
+    const dv = new DataView(out.buffer, out.byteOffset, out.byteLength);
+    expect(dv.getUint32(4, true)).toBe(out.length - 8);
+  });
+
+  it("5MB級のdataチャンクでも正しく高速に往復する", () => {
+    const big = makeWav(2_500_000); // 5MB data
+    const t0 = performance.now();
+    const out = embedWavCues(big, MARKERS, ctx());
+    const elapsed = performance.now() - t0;
+    const dataIn = chunks(big).find((c) => c.id === "data")!;
+    const dataOut = chunks(out).find((c) => c.id === "data")!;
+    expect(dataOut.size).toBe(dataIn.size);
+    // 先頭/末尾/中間のサンプル一致(全量toEqualはテスト自体が重いので点検査)
+    for (const off of [0, 1, 999_999, dataIn.size - 1]) {
+      expect(out[dataOut.start + off]).toBe(big[dataIn.start + off]);
+    }
+    expect(elapsed).toBeLessThan(2000); // 旧実装は数十秒〜、新実装は数十ms想定の粗い上限
+  });
 });
