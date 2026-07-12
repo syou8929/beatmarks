@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { deriveMarkers } from "../deriveMarkers.js";
 import { runExport, TEXT_EXPORTERS, type TextTargetKey } from "../exporters/index.js";
 import { embedWavCues } from "../exporters/wavCues.js";
+import { ExportError } from "../exporters/helpers.js";
 import { TARGETS } from "../naming.js";
 import { FPS_PRESETS } from "../timebase.js";
 import { defaultEditState, parseEngineResult } from "../validate.js";
@@ -93,6 +94,10 @@ describe("統合ゴールデン(fixture→derive→全エクスポータ)", () =
     w(36, "data"); dv.setUint32(40, n * 2, true);
     const out = embedWavCues(header, markers, ctxFor("30"));
     checkGolden("wavcues.sha256", out);
+  });
+
+  it("wavcues を runExport に渡すと ExportError(embedWavCues直接使用へ誘導)", () => {
+    expect(() => runExport("wavcues", markers, ctxFor("30"))).toThrow(ExportError);
   });
 
   it("マーカー導出はfixtureに対して安定", () => {
