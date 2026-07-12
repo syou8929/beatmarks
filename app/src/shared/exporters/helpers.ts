@@ -47,3 +47,5 @@ export function csvField(s: string): string {
 export function padLeft(n: number, width: number): string {
   return String(n).padStart(width, "0");
 }
+
+export class ExportError extends Error {}
