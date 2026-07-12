@@ -1826,6 +1826,8 @@ git add app/src/shared/exporters/json.ts app/src/shared/exporters/csv.ts app/src
 git commit -m "feat(app): 正規JSON・汎用CSVエクスポータ"
 ```
 
+> **レビュー後の追補(2026-07-12 適用済み、commit b5bd190)**: スペック §8 の正規JSON定義(テンポマップ+エンベロープ含む)に合わせ、トップレベルに `tempoMap: ctx.tempoMap` と `envelopes: ctx.envelopes`(null可)を追加。実装はこの追補込みが正。
+
 ---
 
 ### Task 8: MIDI エクスポータ (SMF format 1)
