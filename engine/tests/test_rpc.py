@@ -110,3 +110,19 @@ def test_cli_version():
     )
     assert r.returncode == 0
     assert r.stdout.strip() == "0.1.0"
+
+
+def test_non_object_json_line_is_parse_error():
+    msgs = _run_server_on([json.dumps([1, 2, 3])])
+    assert msgs[0]["error"]["code"] == -32700
+    assert msgs[0]["id"] is None
+
+
+def test_cancel_with_malformed_params_does_not_crash():
+    msgs = _run_server_on([
+        json.dumps({"jsonrpc": "2.0", "id": 7, "method": "cancel", "params": "x"}),
+        json.dumps({"jsonrpc": "2.0", "id": 8, "method": "ping"}),
+    ])
+    by_id = {m.get("id"): m for m in msgs if "id" in m}
+    assert by_id[7]["result"] == {"cancelled": False}
+    assert by_id[8]["result"] == "pong"   # ループが生きている

@@ -71,7 +71,9 @@ class RpcServer:
     def handle(self, msg: dict) -> None:
         method = msg.get("method")
         msg_id = msg.get("id")
-        params = msg.get("params") or {}
+        params = msg.get("params")
+        if not isinstance(params, dict):
+            params = {}
         if method == "ping":
             self._respond(msg_id, "pong")
         elif method == "version":
