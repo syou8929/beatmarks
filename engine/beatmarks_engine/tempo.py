@@ -16,6 +16,9 @@
   巻き戻し後、隣接する拍が同じ極小点に収束して重複フレームになることがある
   (実測: 密なテンポでまれに発生)。重複を残すと拍間隔が0になり、可変テンポの
   瞬間BPM計算 `60.0 / ibis` がゼロ除算になるため、巻き戻し後に一意化する。
+  無音区間など拍が1つも検出できない場合 `beat_frames` は空配列になりうるため
+  (実測: 無音10秒で発生)、巻き戻しは拍が存在するときだけ行う
+  (`onset_backtrack` は空配列を渡すと例外を送出する)。
 """
 import librosa
 import numpy as np
@@ -41,7 +44,8 @@ def track_beats(y: np.ndarray, sr: int) -> dict:
     _tempo, beat_frames = librosa.beat.beat_track(
         onset_envelope=onset_env, sr=sr, hop_length=HOP, trim=True
     )
-    beat_frames = np.unique(librosa.onset.onset_backtrack(beat_frames, onset_env))
+    if beat_frames.size:
+        beat_frames = np.unique(librosa.onset.onset_backtrack(beat_frames, onset_env))
     beats = librosa.frames_to_time(beat_frames, sr=sr, hop_length=HOP)
 
     if len(beats) < 4:
