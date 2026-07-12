@@ -3,6 +3,8 @@ import type { AnalysisResult, EditState, EngineResult } from "./types.js";
 
 export class ValidationError extends Error {}
 
+/** fail() は常に throw する(never)。以降の型ナローイングがこの性質に依存して
+ *  いるため、ログして続行する実装に変えてはならない。 */
 function fail(msg: string): never {
   throw new ValidationError(`engine result invalid: ${msg}`);
 }
