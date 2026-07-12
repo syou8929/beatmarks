@@ -55,7 +55,7 @@ def _novelty(beat_feats: np.ndarray) -> np.ndarray:
 
 
 def detect_sections(y: np.ndarray, sr: int, beats: np.ndarray) -> list[dict]:
-    dur = len(y) / sr
+    dur = float(len(y) / sr)
     beats = np.asarray(beats, dtype=float)
     if len(beats) < KERNEL_HALF * 2 + 1:
         return _single_section(dur)
