@@ -24,7 +24,7 @@ def test_phase_shifts_when_beat_list_is_rotated():
 
 def test_three_four_time_signature():
     y, beats = click_track(
-        120.0, 24.0, accent_every=3, accent_amp=1.0, base_amp=0.35
+        120.0, 24.0, accent_every=3, accent_amp=1.0, base_amp=0.27
     )
     assert estimate_downbeat_phase(y, SR, beats, beats_per_bar=3) == 0
 

@@ -42,7 +42,9 @@ def main(argv=None) -> int:
         return 0
 
     from beatmarks_engine.rpc import RpcServer
-    RpcServer().serve_forever()
+    server = RpcServer()
+    server.serve_forever()
+    server.wait_for_jobs()
     return 0
 
 
