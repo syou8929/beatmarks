@@ -199,6 +199,10 @@ export type MenuEvent =
 
 ### Task 1: 文言定数・errorフェーズ・キャンセルセンチネル・テスト基盤(jsdom/RTL)
 
+> **完了(2026-07-13, commit a715b07)**: レビュー verdict Yes・逸脱ゼロ・225/225。
+> **後続タスクへの全体指示(T1レビューの Important 指摘)**: 本計画書の T2〜T12 のコード例は STRINGS を十分参照していない(例: T8 GridBar のローカル `S` テーブルは `可変` と書くが strings.ts は `可変テンポ`、`redo` キーは strings.ts に不存在、T12 に生の日本語リテラルあり)。**各タスクの実装者は、UI文言をコンポーネントローカルに定義せず strings.ts に寄せること(不足キーは strings.ts に追加し、計画コードのローカルテーブルは置き換える)**。これは承認済みの計画逸脱として扱う。
+> **T9への追加指示**: selectedMarkerId が UNDO/REDO を素通りすることのピン留めテスト+選択中マーカー削除でIDがダングリングしても消費側は等値比較で無害である旨のコメントを追加。
+
 **Files:**
 - Create: `app/src/renderer/strings.ts`(全UI文言定数 — 計画③b全体が参照)
 - Modify: `app/src/renderer/state/store.ts`(error フェーズ・ANALYZE_FAILED・MARKER_SELECTED・selectedMarkerId・網羅性ガード)
