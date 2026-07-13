@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -37,6 +37,10 @@ describe("projectStore", () => {
     expect(() => validateProjectFile({ version: 1 })).toThrow();
   });
 
+  it("validateProjectFile: ui が配列だとエラー(typeof [] === 'object'の抜け穴)", () => {
+    expect(() => validateProjectFile({ ...state(), ui: [] })).toThrow(/ui/);
+  });
+
   it("壊れたJSONの.bmkはエラー", async () => {
     const bad = join(dir, "bad.bmk");
     writeFileSync(bad, "{not json");
@@ -46,5 +50,12 @@ describe("projectStore", () => {
   it("保存はJSONとして再パース可能", async () => {
     const p = await saveProjectTo(state(), join(dir, "re.bmk"));
     expect(() => JSON.parse(readFileSync(p, "utf-8"))).not.toThrow();
+  });
+
+  it("保存はアトミック(tmpに書いてrename): 完了後に.tmp-*が残らない", async () => {
+    const p = await saveProjectTo(state(), join(dir, "atomic"));
+    expect(existsSync(p)).toBe(true);
+    const stray = readdirSync(dir).filter((f) => f.includes(".tmp-"));
+    expect(stray).toEqual([]);
   });
 });

@@ -2,7 +2,7 @@
  *  ここだけを変更すればよいように一元化する。 */
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 
 export function ffmpegPath(): string {
   return process.env["BEATMARKS_FFMPEG"] ?? "ffmpeg";
@@ -27,6 +27,19 @@ export function cleanupTempDir(): void {
     rmSync(cachedTemp, { recursive: true, force: true });
     cachedTemp = null;
   }
+}
+
+/** path が roots のいずれか(ファイル完全一致 or ディレクトリ配下)にあるか。.. 正規化込み。
+ *  resolve()で `..` やシンボリックなセグメントを正規化してから比較するため、
+ *  `<root>/../../etc/passwd` のようなトラバーサルや `<root>-evil` のような
+ *  裸のプレフィックス一致(sep区切りなし)はどちらも弾く。 */
+export function isPathWithinRoots(path: string, roots: Iterable<string>): boolean {
+  const p = resolve(path);
+  for (const root of roots) {
+    const r = resolve(root);
+    if (p === r || p.startsWith(r + sep)) return true;
+  }
+  return false;
 }
 
 export function engineCommand(): { cmd: string; args: string[]; cwd?: string } {

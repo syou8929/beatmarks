@@ -7,7 +7,7 @@ import { createAnalyzer } from "./analyzeMedia.js";
 import { EngineClient } from "./engineClient.js";
 import { probeMedia } from "./ffmpeg.js";
 import { registerHandlers } from "./ipcRegistry.js";
-import { cleanupTempDir, engineCommand, tempDir } from "./paths.js";
+import { cleanupTempDir, engineCommand, isPathWithinRoots, tempDir } from "./paths.js";
 import { openProjectFrom, saveProjectTo, validateProjectFile } from "./projectStore.js";
 
 let win: BrowserWindow | null = null;
@@ -46,8 +46,9 @@ app.whenReady().then(() => {
     },
     cancelAnalyze: () => analyzer.cancel(),
     readFileBytes: async (path) => {
-      const ok = [...readableRoots].some((root) => path === root || path.startsWith(root));
-      if (!ok) throw new Error("このパスの読み取りは許可されていません");
+      if (!isPathWithinRoots(path, readableRoots)) {
+        throw new Error("このパスの読み取りは許可されていません");
+      }
       const buf = await readFile(path);
       return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
     },
@@ -83,9 +84,15 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 
-  app.on("will-quit", () => {
-    void engine.dispose();
-    cleanupTempDir();
+  let quitting = false;
+  app.on("will-quit", (event) => {
+    if (quitting) return;
+    quitting = true;
+    event.preventDefault();
+    void engine.dispose().finally(() => {
+      cleanupTempDir();
+      app.quit();
+    });
   });
 });
 

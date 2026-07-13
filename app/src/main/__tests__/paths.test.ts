@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { cleanupTempDir, engineCommand, tempDir } from "../paths.js";
+import { cleanupTempDir, engineCommand, isPathWithinRoots, tempDir } from "../paths.js";
 
 // engineCommand()はnode:fsのexistsSyncを直接呼ぶため、venvが実在するこの
 // チェックアウトでも「venv無し」分岐をモックで(実ファイルシステムに触れずに)再現する。
@@ -56,5 +57,43 @@ describe("tempDir() / cleanupTempDir()", () => {
     // リセット後の呼び出しは新しいディレクトリを作る(キャッシュが空になっている)
     const p2 = tempDir();
     expect(existsSync(p2)).toBe(true);
+  });
+});
+
+// readFileBytes の許可判定(Task 6レビュー: 素朴な startsWith 実装は正規化なしで
+// `<root>/../../etc/passwd` のようなトラバーサルや `<root>-evil` のような裸の
+// プレフィックス一致を通してしまっていた)。ここでは実ファイルシステムに触れず、
+// resolve()ベースの正規化だけを検証する。
+describe("isPathWithinRoots()", () => {
+  const dirRoot = resolve("/tmp/bm-roots-test/media");
+  const fileRoot = resolve("/tmp/bm-roots-test/media/file.wav");
+
+  it("ディレクトリrootの子(直下)はtrue", () => {
+    expect(isPathWithinRoots(join(dirRoot, "child.wav"), [dirRoot])).toBe(true);
+  });
+
+  it("`..`でrootの外に出るパスはfalse(トラバーサル拒否)", () => {
+    const outside = join(dirRoot, "..", "x");
+    expect(isPathWithinRoots(outside, [dirRoot])).toBe(false);
+  });
+
+  it("root配下に留まる`..`はtrue(正規化後にroot内)", () => {
+    const staysInside = join(dirRoot, "sub", "..", "file.wav");
+    expect(isPathWithinRoots(staysInside, [dirRoot])).toBe(true);
+  });
+
+  it("ファイルrootとの完全一致はtrue", () => {
+    expect(isPathWithinRoots(fileRoot, [fileRoot])).toBe(true);
+  });
+
+  it("ファイルrootの裸のプレフィックス一致(sep区切りなし)はfalse", () => {
+    expect(isPathWithinRoots(`${fileRoot}.evil`, [fileRoot])).toBe(false);
+  });
+
+  it("複数rootのいずれかに一致すればtrue、どれにも一致しなければfalse", () => {
+    const otherRoot = resolve("/tmp/bm-roots-test/other");
+    const roots = new Set([dirRoot, otherRoot]);
+    expect(isPathWithinRoots(join(otherRoot, "y.wav"), roots)).toBe(true);
+    expect(isPathWithinRoots(resolve("/tmp/unrelated"), roots)).toBe(false);
   });
 });
