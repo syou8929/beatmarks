@@ -2143,6 +2143,8 @@ Claude-Session: https://claude.ai/code/session_01SR5fj8BNeN6TUFgoj4zhm6"
 
 ### Task 5: メイン波形Canvas+座標系/ヒットテスト
 
+> **レビュー後の修正(2026-07-13, commits 2a874b6 + cdef5ac + 4686fa7)**: 転写はバイト一致だったが計画コード自体に Critical 3件(計画の「実装検証」はコンパイル+テストのみで、対話/描画セマンティクスは未検証だった教訓)。①**ホイールが passive**: React 19 は JSX onWheel を passive で付けるため preventDefault が無効(ズームと同時にページがスクロール)→ ref+useEffect のネイティブ非passiveリスナーへ。ctrl/meta+wheel(=ピンチ)がパンになっていたのもズームへ是正。方向規約は 上/ピンチアウト=ズームイン(4686fa7 で追修正 — 最初の修正指示の式が逆だった) ②**rAFループが再生開始で起動しない**: 依存配列に再生状態が無い → **契約修正: WaveCanvasProps に isPlaying: boolean を追加**(T12はEditorScreenで再生状態を保持し Transport と WaveCanvas 両方へ渡すこと) ③**paintWave がトランジェントを欠落**: px列が複数バケットに跨るとき1バケットしか見ていない(void bucketsPerPx)→ 跨る全バケットの min/max を畳み込み ④ズームクランプ追加(MIN_SAMPLES_PER_PX=0.25 / MAX=1e6、zoomAt 内でクランプ、エクスポート) ⑤barLenSecOf を可視範囲平均に(可変テンポのラベル密度) ⑥ホイール/ポインタ/isPlaying遷移の対話テスト追加(revert-checkで前コードの失敗を確認済み)。テスト 281→298。
+
 **Files:**
 - Create: `app/src/renderer/editor/waveGeom.ts`(座標変換・可視要素抽出・ヒットテスト — 純ロジック)
 - Create: `app/src/renderer/components/WaveCanvas.tsx`(自前Canvas描画・ポインタ操作)
