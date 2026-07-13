@@ -1,7 +1,7 @@
 """テンポ・拍トラッキング。
 
 - librosa の動的計画法ビートトラッカーで拍列を得る
-- 拍間隔の変動係数 CV < FIXED_CV_THRESHOLD なら「固定BPM」:
+- 拍列の等間隔グリッドへの適合度(変動係数 CV)< FIXED_CV_THRESHOLD なら「固定BPM」:
   最小二乗でグリッド(周期+位相)をフィットし、等間隔グリッドを再生成
 - それ以外は「可変」: 拍列をそのまま採用し、拍ごとの瞬間BPMをテンポマップ化
 
@@ -19,6 +19,17 @@
   無音区間など拍が1つも検出できない場合 `beat_frames` は空配列になりうるため
   (実測: 無音10秒で発生)、巻き戻しは拍が存在するときだけ行う
   (`onset_backtrack` は空配列を渡すと例外を送出する)。
+- fixed/variable 判定は backtrack 前の拍列で行う(量子化ジッタ対策、2026-07-13)。
+  判定指標は「拍列に対する最小二乗グリッド(直線)フィットの残差」の変動係数
+  (std(残差) / フィット周期)を用いる。連続区間 diff の std/mean をそのまま
+  使うと、1拍あたりのフレーム数が整数にならないテンポ(例: 120bpm,
+  hop_length=512, sr=22050 では 21.53 フレーム/拍)で beat_track 自身の
+  フレーム量子化が ±1 フレームの交番パターンを生み、8秒程度の短尺だと
+  それだけで CV が閾値を超えて variable に誤判定される(実測: backtrack前/後
+  どちらの拍列で diff ベース CV を計算しても CV≈0.02294 で同じ値になり、
+  backtrack前後の切替だけでは解消しない)。直線フィット残差は量子化による
+  ±1フレームの往復ノイズがあっても発散しない一方、真のテンポ変化(実測:
+  120→132bpm ランプで CV が 0.033 から 0.43 に拡大)には従来以上に敏感になる。
 """
 import librosa
 import numpy as np
@@ -44,6 +55,7 @@ def track_beats(y: np.ndarray, sr: int) -> dict:
     _tempo, beat_frames = librosa.beat.beat_track(
         onset_envelope=onset_env, sr=sr, hop_length=HOP, trim=True
     )
+    raw_beats = librosa.frames_to_time(beat_frames, sr=sr, hop_length=HOP)
     if beat_frames.size:
         beat_frames = np.unique(librosa.onset.onset_backtrack(beat_frames, onset_env))
     beats = librosa.frames_to_time(beat_frames, sr=sr, hop_length=HOP)
@@ -51,9 +63,17 @@ def track_beats(y: np.ndarray, sr: int) -> dict:
     if len(beats) < 4:
         return _empty_result(beats)
 
-    ibis = np.diff(beats)
-    cv = float(np.std(ibis) / np.mean(ibis))
+    # 固定/可変判定は backtrack 前の拍列(raw_beats)で行う。位置(beats)は
+    # backtrack 済みのまま使う。判定指標は直線グリッドフィット残差の変動係数
+    # (理由はモジュール docstring 実装メモを参照)。
+    judge = raw_beats if len(raw_beats) >= 4 else beats
+    judge_idx = np.arange(len(judge))
+    judge_period, judge_intercept = np.polyfit(judge_idx, judge, 1)
+    judge_resid = judge - (judge_intercept + judge_idx * judge_period)
+    cv = float(np.std(judge_resid) / judge_period)
     confidence = float(np.clip(1.0 - cv * 10.0, 0.0, 1.0))
+
+    ibis = np.diff(beats)  # 可変モードのテンポマップは実位置(backtrack後)基準のまま
 
     if cv < FIXED_CV_THRESHOLD:
         idx = np.arange(len(beats))

@@ -9,6 +9,8 @@
     pip install -e ".[dev]"
     pytest
 
+    pip install -e ".[dev]" -c constraints.txt   # 再現ビルド(依存ピン)
+
 ## プロトコル
 
 stdio 上の NDJSON / JSON-RPC 2.0。メソッド: `ping` / `version` / `analyze` / `cancel`。

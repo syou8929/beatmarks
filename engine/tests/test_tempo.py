@@ -46,3 +46,29 @@ def test_too_short_audio_degrades_gracefully():
     assert res["tempoMode"] in ("fixed", "variable")
     assert isinstance(res["beats"], list)
     assert res["beatConfidence"] == 0.0
+
+
+def test_short_click_track_is_fixed():
+    """持ち越し修正: backtrack量子化ジッタでCVが閾値を跨ぎ、
+    8秒の完全な等間隔クリックがvariable誤判定されていた(実測CV=0.02294)。
+    判定はbacktrack前の拍列で行うことでfixedに収まる。"""
+    y, _ = click_track(120.0, 8.0)
+    res = track_beats(y, SR)
+    assert res["tempoMode"] == "fixed"
+    assert abs(res["bpm"] - 120.0) <= 120.0 * 0.005
+
+
+def test_silent_audio_returns_empty_gracefully():
+    """回帰: 無音でonset_backtrackが空配列例外を出していたガードのピン留め"""
+    y = np.zeros(SR * 10, dtype=np.float32)
+    res = track_beats(y, SR)
+    assert res["beats"] == []
+    assert res["beatConfidence"] == 0.0
+
+
+def test_dense_tempo_dedup_guard():
+    """回帰: backtrack後の重複フレームがdedupされゼロ除算しないことのピン留め"""
+    y, _ = click_track(140.0, 30.0, offset=0.6)
+    res = track_beats(y, SR)  # 例外が出ないこと+拍が単調増加
+    beats = res["beats"]
+    assert all(b2 > b1 for b1, b2 in zip(beats, beats[1:]))
