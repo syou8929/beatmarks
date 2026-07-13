@@ -28,8 +28,13 @@ export interface PlaybackEngine {
   dispose(): void;
 }
 
+export interface PlaybackOptions {
+  onEnded?: () => void; // 自然終了(バッファ終端)時に1回だけ呼ばれる
+}
+
 export function createPlayback(
   ctxFactory: () => AudioContext = () => new AudioContext(),
+  opts: PlaybackOptions = {},
 ): PlaybackEngine {
   let ctx: AudioContext | null = null;
   let buffer: AudioBuffer | null = null;
@@ -44,6 +49,8 @@ export function createPlayback(
   let timer: ReturnType<typeof setInterval> | null = null;
   let scheduledUntil = 0;    // 曲内秒でどこまでクリック予約済みか
   let disposed = false;      // dispose後に遅れて解決するload()等を無視するためのフラグ
+  // 予約済みメトロノームクリック osc。seek/stop で未発火分を止める(スペック §7/③a持ち越し)。
+  let scheduledClicks: OscillatorNode[] = [];
 
   function ensureCtx(): AudioContext {
     if (!ctx) ctx = ctxFactory();
@@ -60,6 +67,16 @@ export function createPlayback(
     osc.connect(gain).connect(c.destination);
     osc.start(atCtxTime);
     osc.stop(atCtxTime + 0.08);
+    scheduledClicks.push(osc);
+    osc.onended = () => { scheduledClicks = scheduledClicks.filter((o) => o !== osc); };
+  }
+
+  function stopScheduledClicks(): void {
+    for (const osc of scheduledClicks) {
+      try { osc.stop(); } catch { /* already stopped/scheduled */ }
+      try { osc.disconnect(); } catch { /* noop */ }
+    }
+    scheduledClicks = [];
   }
 
   function pump(): void {
@@ -101,6 +118,8 @@ export function createPlayback(
       srcNode = null;
       playing = false;
       if (timer) { clearInterval(timer); timer = null; }
+      stopScheduledClicks();
+      opts.onEnded?.(); // 自然終了フック(seek/pause/stopの差し替え発火では上のguardで抜ける)
     };
     srcNode = node;
     node.start(0, startOffset);
@@ -119,6 +138,7 @@ export function createPlayback(
     if (playing) startOffset = currentTime();
     playing = false;
     if (timer) { clearInterval(timer); timer = null; }
+    stopScheduledClicks(); // 停止時も未発火クリックを掃除
   }
 
   function currentTime(): number {
@@ -142,6 +162,9 @@ export function createPlayback(
     },
     play(fromSec?: number): void {
       if (playing) return;
+      const c = ensureCtx();
+      // ブラウザ/Electron のオートプレイ制約対策(③a持ち越し): suspended なら resume
+      if (c.state === "suspended") void c.resume();
       if (fromSec !== undefined) startOffset = fromSec;
       // 終端(duration)以降から再生しようとする場合は先頭に戻す
       // (自然終了後にplay()し直すと無音のゼロ長再生になってしまうバグの防止、fix1)
@@ -158,6 +181,7 @@ export function createPlayback(
     setMetronome(on) {
       metronome = on;
       scheduledUntil = currentTime(); // ONにした瞬間から予約し直す
+      if (!on) stopScheduledClicks(); // OFF で即消音
     },
     updateGrid(beats) {
       grid = beats;

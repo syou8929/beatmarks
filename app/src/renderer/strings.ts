@@ -35,6 +35,7 @@ export const STRINGS = {
   },
   transport: {
     prev: "⏮",
+    prevTitle: "先頭へ",
     play: "▶",
     pause: "⏸",
     loop: "🔁 ループ",
