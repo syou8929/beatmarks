@@ -107,8 +107,8 @@ export function WaveCanvas(props: WaveCanvasProps): React.JSX.Element {
       // ピンチは trackpad が連続値を送るため指数カーブ、ホイールは notch 単位の固定比率。
       const anchorPx = e.clientX - rect.left;
       const factor = e.ctrlKey || e.metaKey
-        ? Math.exp(e.deltaY * 0.01)
-        : e.deltaY > 0 ? 1.15 : 1 / 1.15;
+        ? Math.exp(-e.deltaY * 0.01)
+        : e.deltaY < 0 ? 1.15 : 1 / 1.15;
       const z = zoomAt(vp, factor, anchorPx);
       dispatch({ type: "SET_VIEW", scrollSec: Math.max(0, z.scrollSec), zoomSamplesPerPx: z.samplesPerPx });
     };

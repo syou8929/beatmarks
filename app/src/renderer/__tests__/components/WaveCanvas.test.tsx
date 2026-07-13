@@ -266,28 +266,28 @@ describe("WaveCanvas: ホイール(非passive・カーソル中心ズーム/ピ�
     };
   }
 
-  it("プレーンホイール(縦優勢・deltaY>0)はカーソル中心ズームイン(密度↓)し、preventDefaultされる", () => {
+  it("プレーンホイール(縦優勢・deltaY>0)はカーソル中心ズームアウト(密度↑)し、preventDefaultされる", () => {
     const { canvas, getView, restore } = setup();
     try {
       const before = getView().zoomSamplesPerPx;
       const ev = createEvent.wheel(canvas, { deltaY: 100, deltaX: 0, cancelable: true, clientX: 500, clientY: 50 });
       fireEvent(canvas, ev);
       expect(ev.defaultPrevented).toBe(true);
-      expect(getView().zoomSamplesPerPx).toBeLessThan(before);
+      expect(getView().zoomSamplesPerPx).toBeGreaterThan(before);
     } finally { restore(); }
   });
 
-  it("プレーンホイール(deltaY<0)はズームアウト(密度↑)", () => {
+  it("プレーンホイール(deltaY<0)はズームイン(密度↓)", () => {
     const { canvas, getView, restore } = setup();
     try {
       const before = getView().zoomSamplesPerPx;
       const ev = createEvent.wheel(canvas, { deltaY: -100, deltaX: 0, cancelable: true, clientX: 500, clientY: 50 });
       fireEvent(canvas, ev);
-      expect(getView().zoomSamplesPerPx).toBeGreaterThan(before);
+      expect(getView().zoomSamplesPerPx).toBeLessThan(before);
     } finally { restore(); }
   });
 
-  it("ctrl+wheel(ピンチ相当・deltaY>0)は横スクロールでなくズームになる(旧実装はPANしていた)", () => {
+  it("ctrl+wheel(ピンチイン相当・deltaY>0)は横スクロールでなくズームになる(旧実装はPANしていた)", () => {
     const { canvas, getView, restore } = setup();
     try {
       const beforeZoom = getView().zoomSamplesPerPx;
@@ -295,17 +295,17 @@ describe("WaveCanvas: ホイール(非passive・カーソル中心ズーム/ピ�
       fireEvent(canvas, ev);
       expect(ev.defaultPrevented).toBe(true);
       expect(getView().zoomSamplesPerPx).not.toBe(beforeZoom);
-      expect(getView().zoomSamplesPerPx).toBeLessThan(beforeZoom); // deltaY>0 → factor=exp(1)>1 → ズームイン
+      expect(getView().zoomSamplesPerPx).toBeGreaterThan(beforeZoom); // deltaY>0 → factor=exp(-1)<1 → ズームアウト
     } finally { restore(); }
   });
 
-  it("ctrl+wheel(deltaY<0)はズームアウト", () => {
+  it("ctrl+wheel(ピンチアウト相当・deltaY<0)はズームイン", () => {
     const { canvas, getView, restore } = setup();
     try {
       const beforeZoom = getView().zoomSamplesPerPx;
       const ev = createEvent.wheel(canvas, { deltaY: -100, deltaX: 0, ctrlKey: true, cancelable: true, clientX: 500, clientY: 50 });
       fireEvent(canvas, ev);
-      expect(getView().zoomSamplesPerPx).toBeGreaterThan(beforeZoom);
+      expect(getView().zoomSamplesPerPx).toBeLessThan(beforeZoom);
     } finally { restore(); }
   });
 
