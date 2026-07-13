@@ -1072,6 +1072,8 @@ Claude-Session: https://claude.ai/code/session_01SR5fj8BNeN6TUFgoj4zhm6"
 
 ### Task 3: 時刻フォーマット/パース・スナップ/nudge・viewStore
 
+> **完了(2026-07-13, commit 4a46ed0)**: レビュー verdict Yes・逸脱ゼロ・255/255。ファズ検証: 往復ドリフト sec≤0.5ms / tc≤半フレーム(理論限界) / barBeat 7240拍で誤り0(6/8・負小節含む)。Minor持ち越し(最終レビューで再考): parseTime の桁あふれ("99:99"→6039s を許容) / formatTime の NaN/Infinity 無ガード / snapSec nearest の NaN が grid[0] に化ける / nudge の IEEE754 ダストは表示層が吸収(機能影響なし)。
+
 **Files:**
 - Create: `app/src/renderer/editor/timeFormat.ts`
 - Create: `app/src/renderer/editor/snap.ts`
