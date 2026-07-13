@@ -72,3 +72,40 @@ def test_dense_tempo_dedup_guard():
     res = track_beats(y, SR)  # 例外が出ないこと+拍が単調増加
     beats = res["beats"]
     assert all(b2 > b1 for b1, b2 in zip(beats, beats[1:]))
+
+
+def test_140bpm_short_click_track_is_fixed():
+    """回帰(高BPM境界の外れ値ロバスト化): 140bpm/8秒は backtrack 前拍列の
+    末尾に librosa の spurious な1拍が入り、残差が -72ms 突出する
+    (実測: 他の残差の3倍以上)。トリム前の直線フィット残差CVは0.0475で
+    variable に誤判定されていた。先頭・末尾1拍を除くトリム標準偏差で
+    fixed に収まることをピン留めする。"""
+    y, _ = click_track(140.0, 8.0)
+    res = track_beats(y, SR)
+    assert res["tempoMode"] == "fixed"
+    assert abs(res["bpm"] - 140.0) <= 140.0 * 0.005
+
+
+def test_140bpm_offset_click_track_is_fixed():
+    """回帰(高BPM境界の外れ値ロバスト化): 140bpm/30秒 offset=0.6 は
+    クリップ境界での spurious 拍により末尾2拍の残差が突出し
+    (実測: -124ms, -44ms)、トリム前CVは0.0418で variable に誤判定
+    されていた(offset=0 では同条件でも0.0156でfixedになる、offset依存の
+    境界ケース)。トリム標準偏差 + 閾値0.025で fixed に収まることを
+    ピン留めする。"""
+    y, _ = click_track(140.0, 30.0, offset=0.6)
+    res = track_beats(y, SR)
+    assert res["tempoMode"] == "fixed"
+    assert abs(res["bpm"] - 140.0) <= 140.0 * 0.005
+
+
+def test_174bpm_click_track_is_fixed():
+    """回帰(高BPM境界の外れ値ロバスト化): 174bpm/30秒は特定の1拍の外れ値
+    ではなく、量子化フロア(1フレーム≈23.2msが短い周期に占める割合の増加)
+    が多数の拍に分散して乗るケース。トリム前後どちらのCVも0.0195付近で
+    旧閾値0.02への実測マージンが0.0005しかなかった。閾値を0.025に
+    引き上げたことでマージンを確保できることをピン留めする。"""
+    y, _ = click_track(174.0, 30.0)
+    res = track_beats(y, SR)
+    assert res["tempoMode"] == "fixed"
+    assert abs(res["bpm"] - 174.0) <= 174.0 * 0.005

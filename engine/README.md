@@ -7,9 +7,8 @@
     cd engine
     python3 -m venv .venv && source .venv/bin/activate
     pip install -e ".[dev]"
-    pytest
-
     pip install -e ".[dev]" -c constraints.txt   # 再現ビルド(依存ピン)
+    pytest
 
 ## プロトコル
 

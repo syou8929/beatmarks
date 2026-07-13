@@ -30,13 +30,45 @@
   backtrack前後の切替だけでは解消しない)。直線フィット残差は量子化による
   ±1フレームの往復ノイズがあっても発散しない一方、真のテンポ変化(実測:
   120→132bpm ランプで CV が 0.033 から 0.43 に拡大)には従来以上に敏感になる。
+- 高BPM境界の外れ値ロバスト化(2026-07-13 followup)。上の直線フィット残差
+  CV は、高BPMの短尺クリップで依然マージンが薄い/逆転する2種の要因が
+  残っていた: (a) 量子化フロアの相対上昇 — 1フレーム(hop/sr≈23.2ms)は
+  絶対時間で一定だが周期が短いほど周期に対する比率が増えるため、174bpm/30秒
+  ではトリム前後どちらでも CV≈0.0195〜0.0196 で閾値0.02までの実測マージンが
+  0.0005しかない(多数の拍に分散した量子化ノイズであり特定1拍の外れ値では
+  ないため、トリムしてもほぼ変化しない)。(b) beat_track がクリップ境界近くで
+  spurious な1拍を拾い残差が突出する — 実測: 140bpm/8秒は末尾拍の残差が
+  -72.2ms と他の残差(最大でも±23ms程度)の3倍以上に達し、トリム前CV=0.0475で
+  variable に誤判定される。140bpm/30秒は offset に応じて同種の境界拍が
+  出たり消えたりし(実測: offset=0.6でCV=0.0418、offset=0でCV=0.0156)、
+  fixed/variable の判定が offset に対して不安定だった。
+  MAD(1.4826*median(|resid-median(resid)|))とトリム標準偏差(残差最大1点を
+  除外/先頭・末尾1拍ずつを除外)を全ケース(上記(a)(b)に加え
+  120→124bpmランプ15/30/60秒・120→132bpmランプ60秒・120bpm/8秒)で比較実測。
+  MAD は量子化フロア由来のノイズ(ほぼ一様分布)にガウス仮定の1.4826倍率を
+  適用するとかえって過大評価になり、174bpm/30秒のCVが0.0195→0.0250へ悪化し
+  他の高BPM fixedケースも0.025を超えたままで不採用。先頭・末尾1拍を除いた
+  トリム標準偏差が全候補中で最も広いマージン(fixed側最悪値0.0230、drift側
+  最悪値0.0326、両者の差0.0096)を達成したため採用した。
+  (実装: `judge_resid[1:-1]` — `judge` は上のガードにより常に4拍以上なので
+  トリム後も2拍以上残ることが保証される。)
+  この結果 FIXED_CV_THRESHOLD を 0.02→0.025 に変更した(トリム後の最悪fixed
+  ケース[140bpm/30秒 offset0.6]が0.0230で0.02からの差が0.003程度しかなく、
+  トリムだけでは0.02ラインに寄り切れなかったため)。0.025は真のドリフト最小
+  ケース(+4bpm/15秒ランプ、トリム後CV=0.0326)まで0.0076のマージンを残す
+  控えめな引き上げであり、これ以上(目安0.03超)は真のテンポ変化との分離が
+  細くなるため避ける。
+- variable モードの beatConfidence(= clip(1 - cv*10, 0, 1))は、テンポ変化が
+  大きいほど 0 に収束する設計であり意図的。`analyze.py` は
+  `beatConfidence < 0.5` で `"low-beat-confidence"` 警告を出すため、強い
+  ドリフト/ステップテンポの曲でこの警告が発火するのはバグではなく想定動作。
 """
 import librosa
 import numpy as np
 import scipy.signal
 
 HOP = 512
-FIXED_CV_THRESHOLD = 0.02
+FIXED_CV_THRESHOLD = 0.025  # 根拠はモジュール docstring 実装メモ(2026-07-13 followup)参照
 
 
 def _empty_result(beats: np.ndarray) -> dict:
@@ -64,13 +96,19 @@ def track_beats(y: np.ndarray, sr: int) -> dict:
         return _empty_result(beats)
 
     # 固定/可変判定は backtrack 前の拍列(raw_beats)で行う。位置(beats)は
-    # backtrack 済みのまま使う。判定指標は直線グリッドフィット残差の変動係数
-    # (理由はモジュール docstring 実装メモを参照)。
-    judge = raw_beats if len(raw_beats) >= 4 else beats
+    # backtrack 済みのまま使う。backtrack+unique は要素数を減らすことしか
+    # できないため raw_beats は常に len(beats) 以上(=4以上、上のガードで
+    # 保証済み)であり、フォールバックは不要。
+    judge = raw_beats
     judge_idx = np.arange(len(judge))
     judge_period, judge_intercept = np.polyfit(judge_idx, judge, 1)
     judge_resid = judge - (judge_intercept + judge_idx * judge_period)
-    cv = float(np.std(judge_resid) / judge_period)
+    # 先頭・末尾1拍はクリップ境界での spurious 検出により残差が突出しやすい
+    # ため、スケール推定(トリム標準偏差)から除外する(理由・比較実測は
+    # モジュール docstring 実装メモを参照)。judge は常に4拍以上なので
+    # トリム後も2拍以上残る。
+    trimmed_resid = judge_resid[1:-1]
+    cv = float(np.std(trimmed_resid) / judge_period)
     confidence = float(np.clip(1.0 - cv * 10.0, 0.0, 1.0))
 
     ibis = np.diff(beats)  # 可変モードのテンポマップは実位置(backtrack後)基準のまま
