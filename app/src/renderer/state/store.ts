@@ -85,7 +85,12 @@ function withSourceEdits(p: EditorProject, sourceId: string, edits: EditState): 
 }
 
 /** 計画②の deriveMarkers docstring 契約: グリッド編集で beat-/bar-、
- *  silenceThreshold 変更で sil- の削除IDを無効化(除去)する。 */
+ *  silenceThreshold 変更で sil- の削除IDを無効化(除去)する。
+ *  hitThreshold は意図的にここに含めない — hit-{band}-{i} は analysis.hits への
+ *  配列添字そのもので常に安定(deriveMarkers.ts docstring: 解析配列添字で常に安定)。
+ *  しきい値変更は出力を絞るだけで添字の再計算はしないため hit- の削除IDは腐らない。
+ *  beat-/bar-/sil- はグリッド/しきい値変更のたび位置から再計算されるIDなので、
+ *  そちらだけクリア対象にする。 */
 function clearInvalidDeletedIds(edits: EditState, patch: Partial<EditState>): string[] {
   const touchesGrid = GRID_KEYS.some((k) => k in patch);
   const touchesSilence = "silenceThreshold" in patch;
@@ -155,8 +160,25 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     }
 
-    default:
+    // フェーズ非依存(= editor 到達前でも起こりうる)アクションはここでは
+    // 何もせず、下の editor 専用switchへフォールスルーさせる。
+    case "EDIT_APPLIED":
+    case "SECTION_EDIT_ADDED":
+    case "CUSTOM_MARKER_ADDED":
+    case "MARKER_DELETED":
+    case "SOURCE_SWITCHED":
+    case "FPS_CHANGED":
+    case "ROUNDING_CHANGED":
+    case "UNDO":
+    case "REDO":
       break;
+    default: {
+      // 到達しないはず: Action に新しいtypeを追加してここを更新し忘れると
+      // ここでコンパイルエラーになる(網羅性ガード)。
+      const _exhaustive: never = action;
+      void _exhaustive;
+      break;
+    }
   }
 
   if (state.phase !== "editor") return state;
@@ -214,7 +236,12 @@ export function reducer(state: AppState, action: Action): AppState {
         redo: state.redo.slice(0, -1),
       };
     }
-    default:
+    default: {
+      // 到達しないはず: Action に新しいtypeを追加してここを更新し忘れると
+      // ここでコンパイルエラーになる(網羅性ガード)。
+      const _exhaustive: never = action;
+      void _exhaustive;
       return state;
+    }
   }
 }

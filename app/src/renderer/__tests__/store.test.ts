@@ -96,6 +96,34 @@ describe("編集とundo/redo", () => {
     const mix = s.project.sources.find((x) => x.source.id === "mix")!;
     expect(mix.edits.downbeatShift).toBe(0);
   });
+
+  it("UNDO_LIMIT=100の境界: 101件編集→UNDO100回で最初の編集の値に留まり、101回目はno-op", () => {
+    let s = editorState();
+    // 101件の distinct な編集(初期値0 → 1..101)。UNDO_LIMIT=100 のため
+    // 最古のエントリ(初回編集より前の初期状態)がスタックから溢れて破棄される想定。
+    for (let i = 1; i <= 101; i++) {
+      s = reducer(s, { type: "EDIT_APPLIED", edit: { gridOffsetDeltaSec: i } });
+    }
+    for (let i = 0; i < 100; i++) {
+      s = reducer(s, { type: "UNDO" });
+    }
+    // 初期状態(編集前, 0)へは戻れない — 1回目の編集の値(1)止まり
+    expect(activeEdits(s).gridOffsetDeltaSec).toBe(1);
+    // undoスタックは使い切っているので、もう1回UNDOしてもno-op
+    s = reducer(s, { type: "UNDO" });
+    expect(activeEdits(s).gridOffsetDeltaSec).toBe(1);
+  });
+
+  it("EDIT_APPLIEDでredoスタックがクリアされる: UNDO後に新規編集するとREDOはno-op", () => {
+    let s = editorState();
+    s = reducer(s, { type: "EDIT_APPLIED", edit: { gridOffsetDeltaSec: 0.01 } }); // x
+    s = reducer(s, { type: "UNDO" });
+    s = reducer(s, { type: "EDIT_APPLIED", edit: { gridOffsetDeltaSec: 0.02 } }); // y (xのredoを消すはず)
+    expect(activeEdits(s).gridOffsetDeltaSec).toBeCloseTo(0.02, 9);
+    s = reducer(s, { type: "REDO" });
+    // redoスタックはyの適用時にクリアされているのでno-op、yのまま変化しない
+    expect(activeEdits(s).gridOffsetDeltaSec).toBeCloseTo(0.02, 9);
+  });
 });
 
 describe("deletedMarkerIdsクリア規則(計画②契約)", () => {
