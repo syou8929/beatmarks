@@ -1551,6 +1551,9 @@ Claude-Session: https://claude.ai/code/session_01SR5fj8BNeN6TUFgoj4zhm6"
 
 ### Task 4: playback拡張+トランスポート
 
+> **完了(2026-07-13, commit 1fcfa4c)**: レビュー verdict Yes・266/266。③a持ち越し2件(シーク時stale click停止 / resume()明示)を実質消化(全状態遷移パスで停止 — 計画要求より広い)。逸脱2件は正当なバグ修正: ①strings.ts へ prevTitle 追加(標準指示) ②btn の border ショートハンド/ロングハンド衝突(React の style diff でトグルOFF時に境界線が消える実バグ — RTLのReact警告で発見・ロングハンド化)。
+> **T12への追加指示**: (a) タップテンポのコンポーネント配線RTLテスト(2秒リセット・onTapTempoガード) (b) onEnded が pause/seek/dispose では発火しないネガティブテスト を統合時に追加。
+
 **Files:**
 - Modify: `app/src/renderer/audio/playback.ts`(seek時のstale click停止・ctx.resume明示・onEndedフック)
 - Create: `app/src/renderer/editor/tapTempo.ts`(タップテンポ純ロジック)
