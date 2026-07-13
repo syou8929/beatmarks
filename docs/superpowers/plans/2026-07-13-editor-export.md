@@ -853,6 +853,8 @@ Claude-Session: https://claude.ai/code/session_01SR5fj8BNeN6TUFgoj4zhm6"
 
 ### Task 2: ピークmipmap+Worker
 
+> **完了(2026-07-13, commit 5a8f2b1)**: レビュー verdict Yes・逸脱ゼロ・233/233。軽微メモ: pickLevel は levels 空で undefined を返しうる(現到達不能・将来公開時にガード) / buildLevel はレベル毎に生データ全走査 O(4n)(1hで~317M比較、Worker内なので許容。粗レベルを細レベルから導出する最適化は将来課題)。
+
 **Files:**
 - Create: `app/src/renderer/editor/peaks.ts`
 - Create: `app/src/renderer/editor/peaks.worker.ts`
