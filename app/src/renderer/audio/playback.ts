@@ -43,6 +43,7 @@ export function createPlayback(
   let grid: GridClick[] = [];
   let timer: ReturnType<typeof setInterval> | null = null;
   let scheduledUntil = 0;    // 曲内秒でどこまでクリック予約済みか
+  let disposed = false;      // dispose後に遅れて解決するload()等を無視するためのフラグ
 
   function ensureCtx(): AudioContext {
     if (!ctx) ctx = ctxFactory();
@@ -62,19 +63,21 @@ export function createPlayback(
   }
 
   function pump(): void {
-    if (!playing || !metronome) return;
-    const c = ensureCtx();
+    if (!playing) return;
     const now = currentTime();
+    // ループ境界のチェックはメトロノームのON/OFFに関係なく常に行う
+    // (setLoopがメトロノームなしでは無効化されないようにする)
+    if (loopA !== null && loopB !== null && now >= loopB) {
+      seekInternal(loopA, true);
+      return; // 巻き戻り後の状態は次回のpumpで改めてスケジュールする
+    }
+    if (!metronome) return;
     const from = Math.max(scheduledUntil, now);
     const to = now + SCHEDULE_AHEAD_SEC;
     for (const b of clicksInWindow(grid, from, to)) {
       click(startedAtCtx + (b.timeSec - startOffset), b.isBar);
     }
     scheduledUntil = to;
-    // ループ端で予約基準を巻き直すのは stop/seek 経由(下記loopハンドリング)
-    if (loopA !== null && loopB !== null && now >= loopB) {
-      seekInternal(loopA, true);
-    }
   }
 
   function seekInternal(sec: number, keepPlaying: boolean): void {
@@ -87,10 +90,20 @@ export function createPlayback(
   function startNode(): void {
     const c = ensureCtx();
     if (!buffer) return;
-    srcNode = c.createBufferSource();
-    srcNode.buffer = buffer;
-    srcNode.connect(c.destination);
-    srcNode.start(0, startOffset);
+    const node = c.createBufferSource();
+    node.buffer = buffer;
+    node.connect(c.destination);
+    node.onended = () => {
+      // seek/pause/stop等で既に差し替え済みのノードからの遅延発火(手動stop()でも
+      // onendedは呼ばれる)は無視し、まだ現役のノードの場合だけ自然終了とみなす。
+      if (srcNode !== node) return;
+      startOffset = currentTime(); // durationにクランプ済みの終端位置を保持してから停止扱いにする
+      srcNode = null;
+      playing = false;
+      if (timer) { clearInterval(timer); timer = null; }
+    };
+    srcNode = node;
+    node.start(0, startOffset);
     startedAtCtx = c.currentTime;
     scheduledUntil = startOffset;
     playing = true;
@@ -110,7 +123,9 @@ export function createPlayback(
 
   function currentTime(): number {
     if (!playing || !ctx) return startOffset;
-    return startOffset + (ctx.currentTime - startedAtCtx);
+    // onendedが発火する前の僅かな間もdurationを超えて増え続けないようクランプする
+    // (無限にplaying=trueのまま無音再生されるバグの防止、fix1)
+    return Math.min(startOffset + (ctx.currentTime - startedAtCtx), durationSec());
   }
 
   function durationSec(): number {
@@ -119,12 +134,18 @@ export function createPlayback(
 
   return {
     async load(bytes: ArrayBuffer): Promise<void> {
+      if (disposed) return; // dispose後に遅れて呼ばれた場合は無視(StrictMode二重マウント対策)
       const c = ensureCtx();
-      buffer = await c.decodeAudioData(bytes.slice(0));
+      const decoded = await c.decodeAudioData(bytes.slice(0));
+      if (disposed) return; // decode待ち中にdisposeされた場合も結果を反映しない
+      buffer = decoded;
     },
     play(fromSec?: number): void {
       if (playing) return;
       if (fromSec !== undefined) startOffset = fromSec;
+      // 終端(duration)以降から再生しようとする場合は先頭に戻す
+      // (自然終了後にplay()し直すと無音のゼロ長再生になってしまうバグの防止、fix1)
+      if (startOffset >= durationSec()) startOffset = 0;
       startNode();
     },
     pause(): void { stopNode(); },
@@ -143,6 +164,8 @@ export function createPlayback(
       scheduledUntil = currentTime(); // グリッド変更は即反映
     },
     dispose(): void {
+      if (disposed) return; // 冪等: 二重呼び出しでも安全
+      disposed = true;
       stopNode();
       void ctx?.close();
       ctx = null;

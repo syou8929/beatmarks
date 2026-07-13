@@ -20,6 +20,8 @@ function createWindow(): void {
     webPreferences: {
       preload: join(__dirname, "../preload/index.mjs"),
       nodeIntegration: false, contextIsolation: true, sandbox: false,
+      // DAW的ツールのため非フォーカス時もメトロノーム/再生タイミングを維持する(バックグラウンドスロットリング無効化)
+      backgroundThrottling: false,
     },
   });
   if (process.env["ELECTRON_RENDERER_URL"]) {

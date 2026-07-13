@@ -47,14 +47,19 @@ export function App(): React.JSX.Element {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (!file) return;
-    const path = getIpc().getPathForFile(file);
-    const probe = await getIpc().probeMedia(path);
-    if (probe.tracks.length <= 1) {
-      await startAnalyze(path, {
-        mode: "mix", trackIndexes: [0], channelSplit: "mono",
-      });
-    } else {
-      dispatch({ type: "FILE_PROBED", filePath: path, probe });
+    try {
+      const path = getIpc().getPathForFile(file);
+      const probe = await getIpc().probeMedia(path);
+      if (probe.tracks.length <= 1) {
+        await startAnalyze(path, {
+          mode: "mix", trackIndexes: [0], channelSplit: "mono",
+        });
+      } else {
+        dispatch({ type: "FILE_PROBED", filePath: path, probe });
+      }
+    } catch (err) {
+      alert(`ファイルの読み込みに失敗しました: ${String(err)}`);
+      // phaseはまだ"drop"のままなので追加のdispatchは不要(ドロップ画面に留まる)
     }
   }
 
