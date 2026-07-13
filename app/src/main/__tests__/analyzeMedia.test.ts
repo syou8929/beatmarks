@@ -7,6 +7,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { AnalyzeProgressEvent } from "../../shared/ipc.js";
 import type { AnalysisResult } from "../../shared/types.js";
 import { AnalyzeCancelledError, createAnalyzer } from "../analyzeMedia.js";
+import { EngineError } from "../engineClient.js";
 import { ffmpegPath } from "../paths.js";
 
 const dir = mkdtempSync(join(tmpdir(), "bmam-"));
@@ -56,9 +57,12 @@ describe("analyzeMedia", () => {
     expect(p.sources[0]!.warnings).toEqual(["short-audio"]);
     expect(p.mediaHash).toMatch(/^[0-9a-f]{64}$/);
     expect(p.durationSec).toBeCloseTo(2, 1);
-    // 進捗: extract → load → done がソース情報付きで届く
-    expect(events[0]!.stage).toBe("extract");
-    expect(events.some((e) => e.stage === "done")).toBe(true);
+    // 進捗: extract → load → done の順で、重複/欠落なくそのまま転送される
+    expect(events.map((e) => [e.stage, e.percent])).toEqual([
+      ["extract", 0],
+      ["load", 0],
+      ["done", 100],
+    ]);
     expect(events.every((e) => e.sourceCount === 1 && e.sourceLabel === "2mix")).toBe(true);
     // エンジンには解析用WAV(22.05k)のパスが渡っている
     expect(engine.analyze).toHaveBeenCalledTimes(1);
@@ -84,6 +88,29 @@ describe("analyzeMedia", () => {
       onProgress?.({ stage: "load", percent: 0 });
       await cancelFn!(); // 1ソース目の解析中にキャンセル発火
       return { analysis: fakeAnalysis(), warnings: [] };
+    });
+    const a = createAnalyzer({ engine: engine as never, emitProgress: () => {} });
+    cancelFn = a.cancel;
+    await expect(
+      a.analyzeMedia({
+        filePath: STEREO_WAV,
+        input: { mode: "mix", trackIndexes: [0], channelSplit: "stereo-split" },
+      }),
+    ).rejects.toThrow(AnalyzeCancelledError);
+    expect(engine.analyze).toHaveBeenCalledTimes(1); // 2ソース目に進まない
+    expect(engine.cancelCurrent).toHaveBeenCalled();
+  });
+
+  it("cancel後にengine.analyzeがEngineError(-32800)でrejectしてもAnalyzeCancelledErrorになる", async () => {
+    // 実際のEngineClient: cancel()はcancelCurrent()のACKで解決するが、in-flightの
+    // analyze()自体はその後にEngineError(code -32800)でrejectする(engineClient.test.ts
+    // 「実行中のanalyzeをcancelCurrentで中断できる」参照)。ここではそれを直接再現する。
+    const engine = fakeEngine();
+    let cancelFn: (() => Promise<void>) | null = null;
+    engine.analyze.mockImplementationOnce(async (_p, onProgress) => {
+      onProgress?.({ stage: "load", percent: 0 });
+      await cancelFn!(); // 1ソース目の解析中にキャンセル発火
+      throw new EngineError(-32800, "cancelled");
     });
     const a = createAnalyzer({ engine: engine as never, emitProgress: () => {} });
     cancelFn = a.cancel;
