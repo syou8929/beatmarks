@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { exportAudacityTxt } from "../exporters/audacityTxt.js";
 import { exportBlenderPy } from "../exporters/blenderPy.js";
-import { csvField } from "../exporters/helpers.js";
+import { csvField, ExportError } from "../exporters/helpers.js";
 import { exportMidi } from "../exporters/midi.js";
 import { exportReaperCsv } from "../exporters/reaperCsv.js";
 import { exportResolveEdl } from "../exporters/resolveEdl.js";
 import { formatTimecode, FPS_PRESETS } from "../timebase.js";
-import type { ExportContext, Marker } from "../types.js";
+import { timeSigDenominatorFor, type ExportContext, type Marker } from "../types.js";
 
 function ctx(over: Partial<ExportContext> = {}): ExportContext {
   return {
@@ -46,6 +46,27 @@ describe("拍子分母(MIDI 6/8)", () => {
     const smf = exportMidi([], ctx());
     expect(timeSigOf(smf)).toEqual([4, 2]);
   });
+
+  it("timeSigDenominatorForはbeatsPerBarから分母を導出(6→8, 4→4, 3→4)", () => {
+    expect(timeSigDenominatorFor(6)).toBe(8);
+    expect(timeSigDenominatorFor(4)).toBe(4);
+    expect(timeSigDenominatorFor(3)).toBe(4);
+  });
+
+  it("分母12(2の冪でない)はExportErrorを投げる(Math.log2の暗黙丸めを防ぐ)", () => {
+    expect(() => exportMidi([], ctx({ timeSigDenominator: 12 }))).toThrow(ExportError);
+    expect(() => exportMidi([], ctx({ timeSigDenominator: 12 }))).toThrow(
+      /Invalid timeSigDenominator: 12/,
+    );
+  });
+
+  it("分母2/8/16は例外にならず、ddも正しく符号化される", () => {
+    expect(() => exportMidi([], ctx({ timeSigDenominator: 8 }))).not.toThrow();
+    const smf2 = exportMidi([], ctx({ timeSigDenominator: 2 }));
+    expect(timeSigOf(smf2)[1]).toBe(1); // log2(2)=1
+    const smf16 = exportMidi([], ctx({ timeSigDenominator: 16 }));
+    expect(timeSigOf(smf16)[1]).toBe(4); // log2(16)=4
+  });
 });
 
 describe("ラベル強化", () => {
@@ -54,9 +75,13 @@ describe("ラベル強化", () => {
   });
 
   it("reaper/audacityは\\rも空白化し行数が増えない", () => {
-    const rows = exportReaperCsv(NASTY, ctx({ include: ["custom"] })).trimEnd().split("\n");
+    const out = exportReaperCsv(NASTY, ctx({ include: ["custom"] }));
+    expect(out).not.toMatch(/\r/); // 裸の\rが素通りしていないことを直接確認(行数だけでは検出不可)
+    const rows = out.trimEnd().split("\n");
     expect(rows).toHaveLength(2); // header + 1
-    const rows2 = exportAudacityTxt(NASTY, ctx({ include: ["custom"] })).trimEnd().split("\n");
+    const out2 = exportAudacityTxt(NASTY, ctx({ include: ["custom"] }));
+    expect(out2).not.toMatch(/\r/);
+    const rows2 = out2.trimEnd().split("\n");
     expect(rows2).toHaveLength(1);
   });
 

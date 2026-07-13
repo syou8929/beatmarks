@@ -133,3 +133,8 @@ export interface ExportContext {
   tempoMap: TempoPoint[];      // MIDIテンポトラック用(bpmOverride時はUIが1点に差し替え)
   envelopes: Envelopes | null; // AEエンベロープ焼き込み用(書き出さないときは null)
 }
+
+/** 拍子分子から分母を導出(UIは4/4・3/4・6/8のみ提供: 6拍子は8分母、それ以外は4) */
+export function timeSigDenominatorFor(beatsPerBar: number): number {
+  return beatsPerBar === 6 ? 8 : 4;
+}

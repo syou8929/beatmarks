@@ -1,7 +1,7 @@
 /** SMF (format 1) エクスポータ。DAW 連携の汎用経路(スペック §8)。
  *  Track0=テンポ/拍子、Track1=マーカーメタ、Track2=拍/小節ノート、Track3=ヒットノート。 */
 import type { ExportContext, Marker, TempoPoint } from "../types.js";
-import { selectMarkers } from "./helpers.js";
+import { ExportError, selectMarkers } from "./helpers.js";
 
 export const TPQ = 480;
 
@@ -10,6 +10,10 @@ const NOTE_BEAT = 36;
 const NOTE_HIT: Record<string, number> = { low: 35, mid: 38, high: 42 }; // GM kick/snare/hat
 const NOTE_LEN_TICKS = 60;
 const DRUM_CH = 9; // 0起点(=MIDI ch10)
+// FF 58 04 nn dd cc bb の dd は 2^dd が実分母になるため、分母自体は2の冪でなければ
+// 意味が壊れる(例: 12 → Math.round(Math.log2(12))=4 → dd=4 は分母16を意味してしまい
+// silent corruption になる。レビュー指摘)。表現しうる範囲を2〜32に限定してガードする。
+const VALID_TIME_SIG_DENOMINATORS = new Set([2, 4, 8, 16, 32]);
 
 export function secondsToTicks(
   timeSec: number, tempoMap: TempoPoint[], tpq: number = TPQ,
@@ -89,12 +93,18 @@ function noteOnOff(tick: number, note: number, vel: number, ch: number): AbsEven
 const enc = new TextEncoder();
 
 export function exportMidi(markers: Marker[], ctx: ExportContext): Uint8Array {
+  if (!VALID_TIME_SIG_DENOMINATORS.has(ctx.timeSigDenominator)) {
+    throw new ExportError(`Invalid timeSigDenominator: ${ctx.timeSigDenominator}`);
+  }
+
   const sel = selectMarkers(markers, ctx.include);
   const toTick = (t: number) => secondsToTicks(t, ctx.tempoMap);
 
   // Track 0: テンポ・拍子
   const t0: AbsEvent[] = [
     { tick: 0, order: 0, bytes: metaEvent(0x03, [...enc.encode("BeatMarks Tempo")]) },
+    // cc(メトロノームクリックあたりのMIDIクロック数)=24, bb(四分音符あたりの32分音符数)=8 は
+    // 固定値(MVP簡略化)。6/8のような複合拍子ではcc=36が使われることもあるが本実装では未対応。
     { tick: 0, order: 1, bytes: metaEvent(0x58, [ctx.beatsPerBar & 0xff, Math.round(Math.log2(ctx.timeSigDenominator)), 24, 8]) },
   ];
   for (const p of ctx.tempoMap) {
