@@ -5,6 +5,11 @@ export interface Fps {
   den: number;
 }
 
+export interface AudioSource {
+  id: string;        // unique within project
+  label: string;     // display name (e.g., "Track 1", "Mix")
+}
+
 export type RoundingMode = "nearest" | "floor";
 
 export type MarkerType = "beat" | "bar" | "section" | "hit" | "silence" | "custom";
