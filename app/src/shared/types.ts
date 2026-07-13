@@ -129,6 +129,7 @@ export interface ExportContext {
   bpmLabel: string;            // 表示用 "128.00" / "可変"
   keyLabel: string;            // 表示用 "E minor (9A)"
   beatsPerBar: number;         // MIDI拍子イベント用(edits.beatsPerBar と同値を渡す)
+  timeSigDenominator: number;  // 拍子の分母(4 or 8)。MIDIの拍子メタに使用
   tempoMap: TempoPoint[];      // MIDIテンポトラック用(bpmOverride時はUIが1点に差し替え)
   envelopes: Envelopes | null; // AEエンベロープ焼き込み用(書き出さないときは null)
 }

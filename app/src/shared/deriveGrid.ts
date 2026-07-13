@@ -52,6 +52,7 @@ export function deriveGrid(analysis: AnalysisResult, edits: EditState): GridBeat
   let anchorIndex: number;
   if (edits.gridAnchor) {
     // 4) アンカー: 最も近い拍が小節1・拍1
+    // 同距離タイブレークは早い方(小さいindex)を採用(strict < のため)
     let best = 0;
     for (let i = 1; i < times.length; i++) {
       if (Math.abs(times[i]! - edits.gridAnchor.timeSec) <

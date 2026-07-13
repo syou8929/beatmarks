@@ -52,7 +52,6 @@ interface AbsEvent { tick: number; order: number; bytes: number[] }
 
 function metaEvent(type: number, data: number[] | Uint8Array): number[] {
   const arr = [...data];
-  const vlq: number[] = [];
   let v = arr.length;
   const stack = [v & 0x7f];
   v = Math.floor(v / 128);
@@ -96,7 +95,7 @@ export function exportMidi(markers: Marker[], ctx: ExportContext): Uint8Array {
   // Track 0: テンポ・拍子
   const t0: AbsEvent[] = [
     { tick: 0, order: 0, bytes: metaEvent(0x03, [...enc.encode("BeatMarks Tempo")]) },
-    { tick: 0, order: 1, bytes: metaEvent(0x58, [ctx.beatsPerBar & 0xff, 2, 24, 8]) },
+    { tick: 0, order: 1, bytes: metaEvent(0x58, [ctx.beatsPerBar & 0xff, Math.round(Math.log2(ctx.timeSigDenominator)), 24, 8]) },
   ];
   for (const p of ctx.tempoMap) {
     const us = Math.round(60_000_000 / p.bpm);

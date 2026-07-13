@@ -40,7 +40,7 @@ function ctxFor(fpsKey: "30" | "29.97"): ExportContext {
     audioDurationSec: engine.analysis.durationSec,
     bpmLabel: engine.analysis.bpm ? engine.analysis.bpm.toFixed(2) : "可変",
     keyLabel: `${engine.analysis.key.global.name} (${engine.analysis.key.global.camelot})`,
-    beatsPerBar: 4, tempoMap: engine.analysis.tempoMap,
+    beatsPerBar: 4, timeSigDenominator: 4, tempoMap: engine.analysis.tempoMap,
     envelopes: engine.analysis.envelopes,
   };
 }

@@ -24,9 +24,12 @@ export function exportResolveEdl(markers: Marker[], ctx: ExportContext): string 
     const inTC = formatTimecode(inF, ctx.fps);
     const outTC = formatTimecode(inF + durF, ctx.fps);
     const color = COLOR_MAP[m.color.toLowerCase()] ?? "Blue";
+    // ラベルの | はEDLのフィールド区切り(半角|)と衝突するため全角へ、
+    // 改行はコメント行を壊すため空白へ置換する。
+    const label = m.label.replace(/\|/g, "｜").replace(/[\r\n]+/g, " ");
     lines.push(
       `${padLeft(i + 1, 3)}  001      V     C        ${inTC} ${outTC} ${inTC} ${outTC}`,
-      ` |C:ResolveColor${color} |M:${m.label} |D:${durF}`,
+      ` |C:ResolveColor${color} |M:${label} |D:${durF}`,
       ``,
     );
   });

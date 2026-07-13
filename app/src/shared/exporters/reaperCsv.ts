@@ -10,7 +10,7 @@ export function exportReaperCsv(markers: Marker[], ctx: ExportContext): string {
   const rows = ["Name\tStart\tEnd\tLength\tColor\tType"];
   for (const m of selectMarkers(markers, ctx.include)) {
     const dur = m.meta?.durationSec ?? 0;
-    const name = m.label.replace(/\t/g, " ").replace(/\n/g, " ");
+    const name = m.label.replace(/\t/g, " ").replace(/[\r\n]/g, " ");
     rows.push(
       `${name}\t${sec(m.timeSec)}\t${sec(m.timeSec + dur)}\t${sec(dur)}\t${m.color}\t${m.type}`,
     );

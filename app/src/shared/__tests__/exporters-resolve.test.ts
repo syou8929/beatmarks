@@ -10,7 +10,7 @@ function ctx(over: Partial<ExportContext> = {}): ExportContext {
     include: ["section", "bar", "hit"],
     baseName: "track", sourceLabel: null, audioFileName: "track.wav",
     audioDurationSec: 10, bpmLabel: "120.00", keyLabel: "C major (8B)",
-    beatsPerBar: 4, tempoMap: [{ timeSec: 0, bpm: 120 }], envelopes: null,
+    beatsPerBar: 4, timeSigDenominator: 4, tempoMap: [{ timeSec: 0, bpm: 120 }], envelopes: null,
     ...over,
   };
 }

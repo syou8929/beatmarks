@@ -41,7 +41,7 @@ export function escapeJsString(s: string): string {
 }
 
 export function csvField(s: string): string {
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 export function padLeft(n: number, width: number): string {

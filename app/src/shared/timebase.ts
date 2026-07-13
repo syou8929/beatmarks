@@ -38,9 +38,10 @@ export function frameToTime(frame: number, fps: Fps): number {
 
 /** ノンドロップTC。ベースフレームレート = ceil(num/den)(29.97→30, 23.976→24)。 */
 export function formatTimecode(frame: number, fps: Fps): string {
+  const f = Math.max(0, frame);
   const base = Math.ceil(fps.num / fps.den);
-  const ff = frame % base;
-  const totalSec = Math.floor(frame / base);
+  const ff = f % base;
+  const totalSec = Math.floor(f / base);
   const ss = totalSec % 60;
   const mm = Math.floor(totalSec / 60) % 60;
   const hh = Math.floor(totalSec / 3600);
