@@ -10,7 +10,12 @@ import { ffmpegPath, ffprobePath } from "./paths.js";
 
 const execFileP = promisify(execFile);
 
-export class FfmpegError extends Error {}
+export class FfmpegError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FfmpegError";
+  }
+}
 
 async function run(bin: string, args: string[]): Promise<string> {
   try {
@@ -52,11 +57,7 @@ export async function probeMedia(filePath: string): Promise<ProbeResult> {
   return { durationSec, tracks };
 }
 
-/** 選択audioトラック(0起点のaudio順)をffmpegの -map 指定に変換 */
-function mapArgs(trackIndexes: number[]): string[] {
-  return trackIndexes.flatMap((t) => ["-map", `0:a:${t}`]);
-}
-
+/** 呼び出し側がoutDirのライフサイクル(失敗時の掃除を含む)を所有する。 */
 export async function extractPlaybackWav(
   filePath: string, trackIndexes: number[], outPath: string,
 ): Promise<void> {
@@ -76,12 +77,16 @@ export async function extractPlaybackWav(
 
 const ANALYSIS_ARGS = ["-ar", "22050", "-c:a", "pcm_s16le"];
 
+/** 呼び出し側がoutDirのライフサイクル(失敗時の掃除を含む)を所有する。
+ *  マルチトラック分岐はループ途中で失敗すると、それまでに書き出し済みの
+ *  per-trackWAVをoutDirに残したまま例外を投げる(意図的な設計)。 */
 export async function extractAnalysisSources(
   filePath: string, input: InputConfig, outDir: string,
 ): Promise<{ source: AudioSource; wavPath: string }[]> {
   const out: { source: AudioSource; wavPath: string }[] = [];
 
   if (input.mode === "multitrack") {
+    // channelSplit はここでは無視する(各トラックはモノミックス固定)
     for (const t of input.trackIndexes) {
       const wavPath = join(outDir, `src-track${t}.wav`);
       await run(ffmpegPath(), [
@@ -112,6 +117,17 @@ export async function extractAnalysisSources(
   }
 
   // stereo-split: L / R を個別ソースに(スペック §3.1)
+  // 選択トラックが全てモノだと channelsplit がL/Rに同一内容を複製するだけになる
+  // (無音断・重複解析の原因)。少なくとも1トラックがステレオであることを事前確認する。
+  const probe = await probeMedia(filePath);
+  const hasStereoTrack = input.trackIndexes.some(
+    (t) => (probe.tracks[t]?.channels ?? 0) >= 2,
+  );
+  if (!hasStereoTrack) {
+    throw new FfmpegError(
+      "stereo-split requires at least one stereo track in the selection; all selected tracks are mono",
+    );
+  }
   const lPath = join(outDir, "src-L.wav");
   const rPath = join(outDir, "src-R.wav");
   await run(ffmpegPath(), [

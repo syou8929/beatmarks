@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -20,6 +20,8 @@ const STEREO_WAV = join(dir, "stereo.wav");
 // mkvコンテナに切り替えると同条件で正しく往復する。モジュール側(ffmpeg.ts)は
 // コンテナに依存しないffprobe JSONパースのみで、公開挙動・アサーションは無変更。
 const TWO_TRACK_FILE = join(dir, "two.mkv");
+// モノ限定フィクスチャ(stereo-splitのモノ専用ガード検証用)
+const MONO_WAV = join(dir, "mono.wav");
 
 beforeAll(() => {
   // フィクスチャをffmpegで合成(実メディアはコミットしない)
@@ -38,6 +40,11 @@ beforeAll(() => {
     "-map", "0:a", "-map", "1:a",
     "-metadata:s:a:1", "title=Vo",
     "-c:a", "aac", TWO_TRACK_FILE,
+  ]);
+  // 3) 単一モノトラックの1秒WAV(440Hz)
+  execFileSync(ffmpegPath(), [
+    "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+    "-ar", "44100", "-ac", "1", MONO_WAV,
   ]);
 }, 60_000);
 
@@ -71,6 +78,19 @@ describe("extractPlaybackWav", () => {
     expect(info.streams[0].sample_rate).toBe("44100");
     expect(info.streams[0].channels).toBe(2);
   });
+
+  it("amix: 2トラック混合(trackIndexes:[0,1])でも44.1kHzステレオWAVが出る", async () => {
+    const out = join(dir, "play-amix.wav");
+    await extractPlaybackWav(TWO_TRACK_FILE, [0, 1], out);
+    expect(existsSync(out)).toBe(true);
+    const info = JSON.parse(
+      execFileSync("ffprobe", ["-v", "quiet", "-print_format", "json",
+        "-show_streams", out]).toString(),
+    );
+    expect(info.streams[0].sample_rate).toBe("44100");
+    expect(info.streams[0].channels).toBe(2);
+    expect(info.streams[0].codec_name).toBe("pcm_s16le");
+  });
 });
 
 describe("extractAnalysisSources", () => {
@@ -81,6 +101,19 @@ describe("extractAnalysisSources", () => {
     );
     expect(srcs).toHaveLength(1);
     expect(srcs[0]!.source).toMatchObject({ kind: "mix", label: "2mix" });
+    const info = JSON.parse(execFileSync("ffprobe", ["-v", "quiet", "-print_format",
+      "json", "-show_streams", srcs[0]!.wavPath]).toString());
+    expect(info.streams[0].sample_rate).toBe("22050");
+    expect(info.streams[0].channels).toBe(1);
+  });
+
+  it("mix+mono: amixで2トラック混合(trackIndexes:[0,1])しても1ソース22.05kHzモノ", async () => {
+    const outDir = mkdtempSync(join(dir, "mixmono-amix-"));
+    const srcs = await extractAnalysisSources(
+      TWO_TRACK_FILE, { mode: "mix", trackIndexes: [0, 1], channelSplit: "mono" }, outDir,
+    );
+    expect(srcs).toHaveLength(1);
+    expect(srcs[0]!.source).toMatchObject({ id: "mix", kind: "mix" });
     const info = JSON.parse(execFileSync("ffprobe", ["-v", "quiet", "-print_format",
       "json", "-show_streams", srcs[0]!.wavPath]).toString());
     expect(info.streams[0].sample_rate).toBe("22050");
@@ -99,6 +132,16 @@ describe("extractAnalysisSources", () => {
     const a = execFileSync("md5sum", [srcs[0]!.wavPath]).toString().split(" ")[0];
     const b = execFileSync("md5sum", [srcs[1]!.wavPath]).toString().split(" ")[0];
     expect(a).not.toBe(b);
+  });
+
+  it("mix+stereo-split: 選択トラックが全てモノならFfmpegErrorで拒否", async () => {
+    const outDir = mkdtempSync(join(dir, "split-mono-"));
+    const promise = extractAnalysisSources(
+      MONO_WAV, { mode: "mix", trackIndexes: [0], channelSplit: "stereo-split" }, outDir,
+    );
+    await expect(promise).rejects.toThrow(FfmpegError);
+    await expect(promise).rejects.toThrow(/mono/i);
+    await expect(promise).rejects.toThrow(/stereo/i);
   });
 
   it("multitrack: トラックごとにソース化されtitleがラベルになる", async () => {
