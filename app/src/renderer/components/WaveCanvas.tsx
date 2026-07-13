@@ -19,12 +19,16 @@ export interface WaveCanvasProps {
   anchorSec: number | null;
   playback: PlaybackEngine;
   sampleRate: number;
+  /** 再生中か(rAFプレイヘッドループの起動制御用)。playback は同一参照のまま内部で
+   *  再生状態が変わるため、React に再描画ループの開始/停止を伝えるにはこの reactive な
+   *  prop が要る(playback.isPlaying() だけでは effect の依存に乗らず起動しない)。 */
+  isPlaying: boolean;
   onSelectMarker: (id: string) => void;
   onAnchorDrag: (sec: number) => void;
 }
 
 export function WaveCanvas(props: WaveCanvasProps): React.JSX.Element {
-  const { playback, grid, markers, anchorSec, sampleRate } = props;
+  const { playback, grid, markers, anchorSec, sampleRate, isPlaying } = props;
   const { view, dispatch } = useViewStore();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const draggingAnchor = useRef(false);
@@ -64,15 +68,17 @@ export function WaveCanvas(props: WaveCanvasProps): React.JSX.Element {
   // 表示状態・データ変更時に再描画
   useEffect(() => { draw(); }, [draw]);
 
-  // 再生中のみ rAF でプレイヘッド更新(停止中は静止)
+  // 再生中のみ rAF でプレイヘッド更新(停止中は静止)。
+  // isPlaying を依存に含めることで、再生開始/停止の切り替え時に必ずこの effect が
+  // 再実行される(playback は同一オブジェクト参照のままなので、それだけでは起動しない)。
   useEffect(() => {
     let raf = 0;
     const loop = () => {
       if (playback.isPlaying()) { draw(); raf = requestAnimationFrame(loop); }
     };
-    if (playback.isPlaying()) raf = requestAnimationFrame(loop);
+    if (isPlaying) raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [draw, playback]);
+  }, [draw, playback, isPlaying]);
 
   function localPos(e: React.PointerEvent): { x: number; y: number; w: number } {
     const cv = canvasRef.current!;
@@ -80,33 +86,48 @@ export function WaveCanvas(props: WaveCanvasProps): React.JSX.Element {
     return { x: e.clientX - rect.left, y: e.clientY - rect.top, w: rect.width };
   }
 
-  function onWheel(e: React.WheelEvent): void {
-    const cv = canvasRef.current!;
-    const rect = cv.getBoundingClientRect();
-    const anchorPx = e.clientX - rect.left;
-    const vp = viewport(rect.width);
-    if (e.ctrlKey || e.metaKey) {
-      // 横スクロール
-      const dSec = (e.deltaY * vp.samplesPerPx) / vp.sampleRate;
-      dispatch({ type: "SET_VIEW", scrollSec: Math.max(0, vp.scrollSec + dSec) });
-    } else {
-      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+  // ホイール/トラックパッドのズーム・スクロール(スペック §7「ホイール/ピンチでカーソル中心ズーム」)。
+  // React 19 は JSX の onWheel を passive リスナーとして登録するため、そこで e.preventDefault() を
+  // 呼んでもページスクロールを止められない。ここでは canvas に直接 addEventListener し、
+  // { passive: false } を明示して確実に preventDefault を効かせる。
+  useEffect(() => {
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const handleWheel = (e: WheelEvent): void => {
+      e.preventDefault();
+      const rect = cv.getBoundingClientRect();
+      const vp = viewport(rect.width);
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        // 横優勢(2本指の水平スワイプ等) → 横スクロール
+        const dSec = (e.deltaX * vp.samplesPerPx) / vp.sampleRate;
+        dispatch({ type: "SET_VIEW", scrollSec: Math.max(0, vp.scrollSec + dSec) });
+        return;
+      }
+      // 縦優勢 → カーソル中心ズーム(通常ホイールとピンチ[ctrl/meta+wheel]の両方)。
+      // ピンチは trackpad が連続値を送るため指数カーブ、ホイールは notch 単位の固定比率。
+      const anchorPx = e.clientX - rect.left;
+      const factor = e.ctrlKey || e.metaKey
+        ? Math.exp(e.deltaY * 0.01)
+        : e.deltaY > 0 ? 1.15 : 1 / 1.15;
       const z = zoomAt(vp, factor, anchorPx);
       dispatch({ type: "SET_VIEW", scrollSec: Math.max(0, z.scrollSec), zoomSamplesPerPx: z.samplesPerPx });
-    }
-  }
+    };
+    cv.addEventListener("wheel", handleWheel, { passive: false });
+    return () => cv.removeEventListener("wheel", handleWheel);
+  }, [viewport, dispatch]);
 
   const dragState = useRef<{ startX: number; startScroll: number } | null>(null);
 
   function onPointerDown(e: React.PointerEvent): void {
     const { x, y, w } = localPos(e);
     const cv = canvasRef.current!;
-    const hit = hitTest(x, y, layout(w, cv.getBoundingClientRect().height));
+    const lay = layout(w, cv.getBoundingClientRect().height);
+    const hit = hitTest(x, y, lay);
     cv.setPointerCapture(e.pointerId);
     if (hit.kind === "anchor") { draggingAnchor.current = true; return; }
     if (hit.kind === "marker") { props.onSelectMarker(hit.id); return; }
     if (hit.kind === "sectionBoundary") {
-      const b = layout(w, 0).sectionBoundaries.find((s) => s.index === hit.index);
+      const b = lay.sectionBoundaries.find((s) => s.index === hit.index);
       if (b) props.onSelectMarker(b.id);
       return;
     }
@@ -138,7 +159,6 @@ export function WaveCanvas(props: WaveCanvasProps): React.JSX.Element {
     <canvas
       ref={canvasRef}
       style={{ width: "100%", height: "100%", display: "block", touchAction: "none", cursor: "crosshair" }}
-      onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

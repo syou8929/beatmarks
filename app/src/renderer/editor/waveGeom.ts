@@ -22,10 +22,17 @@ export function visibleRange(vp: Viewport): { fromSec: number; toSec: number } {
   return { fromSec: vp.scrollSec, toSec: pxToSec(vp.widthPx, vp) };
 }
 
-/** カーソル中心ズーム: factor>1=拡大(密度↓)。anchorPx の時刻を不変に保つ。 */
+/** ズーム密度(samplesPerPx)の許容範囲。サンプルレベル(4px/サンプル)〜大幅縮小まで。
+ *  範囲外だと NaN/Infinity ジオメトリになりうるため zoomAt でクランプする。 */
+export const MIN_SAMPLES_PER_PX = 0.25;
+export const MAX_SAMPLES_PER_PX = 1_000_000;
+
+/** カーソル中心ズーム: factor>1=拡大(密度↓)。anchorPx の時刻を不変に保つ。
+ *  samplesPerPx は [MIN_SAMPLES_PER_PX, MAX_SAMPLES_PER_PX] にクランプする(暴走ズーム対策)。 */
 export function zoomAt(vp: Viewport, factor: number, anchorPx: number): Viewport {
   const anchorSec = pxToSec(anchorPx, vp);
-  const samplesPerPx = vp.samplesPerPx / factor;
+  const raw = vp.samplesPerPx / factor;
+  const samplesPerPx = Math.min(MAX_SAMPLES_PER_PX, Math.max(MIN_SAMPLES_PER_PX, raw));
   const scrollSec = anchorSec - (anchorPx * samplesPerPx) / vp.sampleRate;
   return { ...vp, samplesPerPx, scrollSec };
 }
@@ -174,31 +181,41 @@ export function paintWave(ctx: Ctx2D, p: PaintParams): PaintStats {
     drewFreeDim = true;
   }
 
-  // (a) ピーク(min/max 縦線)
+  // (a) ピーク(min/max 縦線)。1px が複数バケットに跨る(samplesPerPx > samplesPerBucket)場合は
+  // そのpx列が覆う全バケットを集約(min of min / max of max)しないとトランジェントを取りこぼす。
   if (p.peaks && p.peaks.length > 0) {
     const level = pickLevel(p.peaks, vp.samplesPerPx);
-    const bucketsPerPx = vp.samplesPerPx / level.samplesPerBucket;
+    const spb = level.samplesPerBucket;
     ctx.strokeStyle = "#9ecbff";
     ctx.globalAlpha = 0.75;
     ctx.beginPath();
     for (let px = 0; px < W; px++) {
-      const sec = pxToSec(px, vp);
-      const sampleIdx = sec * vp.sampleRate;
-      const bucket = Math.floor(sampleIdx / level.samplesPerBucket);
-      if (bucket < 0 || bucket >= level.min.length) continue;
-      const lo = level.min[bucket]!;
-      const hi = level.max[bucket]!;
+      const startSample = pxToSec(px, vp) * vp.sampleRate;
+      const endSample = pxToSec(px + 1, vp) * vp.sampleRate;
+      let bucketStart = Math.floor(startSample / spb);
+      let bucketEnd = Math.floor((endSample - 1) / spb);
+      if (bucketEnd < bucketStart) bucketEnd = bucketStart; // サブサンプル密度: 最低1バケットは見る
+      bucketStart = Math.max(0, bucketStart);
+      bucketEnd = Math.min(level.min.length - 1, bucketEnd);
+      if (bucketStart > bucketEnd) continue; // px列が範囲外(バケット無し)
+      let lo = level.min[bucketStart]!;
+      let hi = level.max[bucketStart]!;
+      for (let b = bucketStart + 1; b <= bucketEnd; b++) {
+        const bl = level.min[b]!;
+        const bh = level.max[b]!;
+        if (bl < lo) lo = bl;
+        if (bh > hi) hi = bh;
+      }
       ctx.moveTo(px + 0.5, mid - hi * (mid - 8));
       ctx.lineTo(px + 0.5, mid - lo * (mid - 8));
     }
     ctx.stroke();
     ctx.globalAlpha = 1;
-    void bucketsPerPx;
   }
 
   // (b) 拍/小節グリッド + 小節番号
   const lines = visibleGridLines(p.grid, vp);
-  const barStep = adaptiveBarStep(barLenSecOf(p.grid), vp);
+  const barStep = adaptiveBarStep(barLenSecOf(p.grid, vp), vp);
   let barLabels = 0;
   ctx.font = "9px monospace";
   for (const l of lines) {
@@ -257,7 +274,16 @@ export function paintWave(ctx: Ctx2D, p: PaintParams): PaintStats {
   };
 }
 
-function barLenSecOf(grid: GridBeat[]): number {
+/** 小節間隔(秒): 可変テンポ対応のため、可視窓内の小節群の平均間隔を使う
+ * (窓内が2小節未満なら先頭2小節の間隔にフォールバック — 従来の定数テンポ挙動)。 */
+function barLenSecOf(grid: GridBeat[], vp: Viewport): number {
   const bars = grid.filter((g) => g.isBar && !g.free);
+  const { fromSec, toSec } = visibleRange(vp);
+  const visible = bars.filter((b) => b.timeSec >= fromSec && b.timeSec <= toSec);
+  if (visible.length >= 2) {
+    const first = visible[0]!.timeSec;
+    const last = visible[visible.length - 1]!.timeSec;
+    return (last - first) / (visible.length - 1);
+  }
   return bars.length >= 2 ? bars[1]!.timeSec - bars[0]!.timeSec : 2;
 }

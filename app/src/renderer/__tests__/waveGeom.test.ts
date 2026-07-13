@@ -4,7 +4,7 @@ import { deriveGrid } from "../../shared/deriveGrid.js";
 import type { AnalysisResult, Marker } from "../../shared/types.js";
 import { defaultEditState } from "../../shared/validate.js";
 import {
-  adaptiveBarStep, freeZoneEndSec, hitTest, pxToSec, secToPx,
+  adaptiveBarStep, freeZoneEndSec, hitTest, MAX_SAMPLES_PER_PX, MIN_SAMPLES_PER_PX, pxToSec, secToPx,
   silenceRegionsFromMarkers, visibleGridLines, visibleRange, zoomAt,
   type Viewport, type WaveLayout,
 } from "../editor/waveGeom.js";
@@ -41,6 +41,43 @@ describe("zoomAt(カーソル中心)", () => {
     const z = zoomAt(VP, 0.5, anchorPx);
     expect(z.samplesPerPx).toBeCloseTo(882, 6);
     expect(pxToSec(anchorPx, z)).toBeCloseTo(before, 6);
+  });
+});
+
+describe("zoomAt: samplesPerPx クランプ(暴走ズーム対策)", () => {
+  it("過剰ズームイン(巨大factor)は MIN_SAMPLES_PER_PX でクランプされ、NaN/Infinity にならない", () => {
+    const z = zoomAt(VP, 1e12, 300);
+    expect(z.samplesPerPx).toBe(MIN_SAMPLES_PER_PX);
+    expect(Number.isFinite(z.samplesPerPx)).toBe(true);
+    expect(Number.isFinite(z.scrollSec)).toBe(true);
+  });
+  it("過剰ズームアウト(極小factor)は MAX_SAMPLES_PER_PX でクランプされ、NaN/Infinity にならない", () => {
+    const z = zoomAt(VP, 1e-9, 300);
+    expect(z.samplesPerPx).toBe(MAX_SAMPLES_PER_PX);
+    expect(Number.isFinite(z.samplesPerPx)).toBe(true);
+    expect(Number.isFinite(z.scrollSec)).toBe(true);
+  });
+  it("クランプが効いてもアンカー px の時刻は不変(クランプ後の値から scrollSec を再計算するため)", () => {
+    const anchorPx = 300;
+    const before = pxToSec(anchorPx, VP);
+    const zIn = zoomAt(VP, 1e12, anchorPx);
+    const zOut = zoomAt(VP, 1e-9, anchorPx);
+    expect(pxToSec(anchorPx, zIn)).toBeCloseTo(before, 6);
+    expect(pxToSec(anchorPx, zOut)).toBeCloseTo(before, 6);
+  });
+  it("fuzz: 疑似乱数200件で samplesPerPx は常にクランプ範囲内、アンカー不変", () => {
+    let seed = 42;
+    const rand = (): number => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    for (let i = 0; i < 200; i++) {
+      const vp: Viewport = { scrollSec: rand() * 100, samplesPerPx: 1 + rand() * 2000, sampleRate: 44100, widthPx: 1000 };
+      const anchorPx = rand() * vp.widthPx;
+      const factor = 0.01 + rand() * 100;
+      const before = pxToSec(anchorPx, vp);
+      const z = zoomAt(vp, factor, anchorPx);
+      expect(z.samplesPerPx).toBeGreaterThanOrEqual(MIN_SAMPLES_PER_PX);
+      expect(z.samplesPerPx).toBeLessThanOrEqual(MAX_SAMPLES_PER_PX);
+      expect(pxToSec(anchorPx, z)).toBeCloseTo(before, 6);
+    }
   });
 });
 
@@ -101,5 +138,22 @@ describe("hitTest 優先度", () => {
   });
   it("何もない所は background", () => {
     expect(hitTest(secToPx(13, VP), 120, layout)).toEqual({ kind: "background" });
+  });
+});
+
+describe("hitTest: 近接マーカーは最近傍が決定的に勝つ", () => {
+  // 2px 離れた2マーカー。クリック位置をどちらかへ僅かに寄せ、常に「近い方」が勝つことを
+  // 配列順とは無関係に確認する(先勝ち/後勝ちの偶然一致ではないことの証明)。
+  const markerA = { id: "m-a", sec: pxToSec(800, VP), type: "hit" as const };
+  const markerB = { id: "m-b", sec: pxToSec(802, VP), type: "hit" as const };
+  const layout: WaveLayout = {
+    viewport: VP, heightPx: 200, anchorSec: null, sectionBoundaries: [],
+    markers: [markerA, markerB],
+  };
+  it("Aに近いクリックはAが勝つ", () => {
+    expect(hitTest(800.4, 120, layout)).toEqual({ kind: "marker", id: "m-a" });
+  });
+  it("Bに近いクリックはBが勝つ(配列順は不変、勝者だけ変わる)", () => {
+    expect(hitTest(801.6, 120, layout)).toEqual({ kind: "marker", id: "m-b" });
   });
 });
