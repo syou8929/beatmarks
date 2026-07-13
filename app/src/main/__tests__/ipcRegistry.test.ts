@@ -56,4 +56,11 @@ describe("registerHandlers", () => {
     );
     await expect(ipc.invoke(IPC_CHANNELS.probeMedia, "/x")).rejects.toThrow(/boom/);
   });
+
+  it("AudioSourceはspec§6の3フィールドを持つ(型回帰ガード)", () => {
+    const s: import("../../shared/types.js").AudioSource = {
+      id: "mix", kind: "mix", label: "2mix",
+    };
+    expect(s.kind).toBe("mix");
+  });
 });

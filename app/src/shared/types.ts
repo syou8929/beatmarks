@@ -5,9 +5,11 @@ export interface Fps {
   den: number;
 }
 
+/** 解析ソース(スペック §3.1/§6)。マルチトラック・チャンネル分割の単位。 */
 export interface AudioSource {
-  id: string;        // unique within project
-  label: string;     // display name (e.g., "Track 1", "Mix")
+  id: string;                          // プロジェクト内で一意(例 "mix", "track-0", "ch-L")
+  kind: "mix" | "track" | "channel";   // モノ/2mix統合・トラック・チャンネル(L/R等)
+  label: string;                       // 表示名(例 "2mix", "Vo", "L")
 }
 
 export type RoundingMode = "nearest" | "floor";
