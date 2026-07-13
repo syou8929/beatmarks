@@ -37,7 +37,14 @@ export type AppState =
   | { phase: "drop" }
   | { phase: "input-config"; filePath: string; probe: import("../../shared/ipc.js").ProbeResult }
   | { phase: "analyzing"; progress: AnalyzeProgressEvent | null }
-  | { phase: "editor"; project: EditorProject; undo: UndoEntry[]; redo: UndoEntry[] };
+  | { phase: "error"; errorMessage: string }
+  | {
+      phase: "editor";
+      project: EditorProject;
+      undo: UndoEntry[];
+      redo: UndoEntry[];
+      selectedMarkerId: string | null;
+    };
 
 export type Action =
   | { type: "FILE_PROBED"; filePath: string; probe: import("../../shared/ipc.js").ProbeResult }
@@ -54,6 +61,8 @@ export type Action =
   | { type: "FPS_CHANGED"; fps: Fps }
   | { type: "ROUNDING_CHANGED"; rounding: RoundingMode }
   | { type: "UNDO" }
+  | { type: "ANALYZE_FAILED"; message: string }
+  | { type: "MARKER_SELECTED"; markerId: string | null }
   | { type: "REDO" };
 
 const UNDO_LIMIT = 100;
@@ -125,6 +134,8 @@ export function reducer(state: AppState, action: Action): AppState {
       return state.phase === "analyzing" ? { ...state, progress: action.progress } : state;
     case "RESET":
       return initialState();
+    case "ANALYZE_FAILED":
+      return { phase: "error", errorMessage: action.message };
 
     case "PROJECT_READY": {
       const p = action.project;
@@ -141,7 +152,7 @@ export function reducer(state: AppState, action: Action): AppState {
           fps: { num: 30, den: 1 },
           rounding: "nearest",
         },
-        undo: [], redo: [],
+        undo: [], redo: [], selectedMarkerId: null,
       };
     }
 
@@ -156,7 +167,7 @@ export function reducer(state: AppState, action: Action): AppState {
           activeSourceId: s.activeSourceId,
           fps: s.ui.fps, rounding: s.ui.rounding,
         },
-        undo: [], redo: [],
+        undo: [], redo: [], selectedMarkerId: null,
       };
     }
 
@@ -166,6 +177,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "SECTION_EDIT_ADDED":
     case "CUSTOM_MARKER_ADDED":
     case "MARKER_DELETED":
+    case "MARKER_SELECTED":
     case "SOURCE_SWITCHED":
     case "FPS_CHANGED":
     case "ROUNDING_CHANGED":
@@ -208,7 +220,13 @@ export function reducer(state: AppState, action: Action): AppState {
       });
     }
     case "SOURCE_SWITCHED":
-      return { ...state, project: { ...state.project, activeSourceId: action.sourceId } };
+      return {
+        ...state,
+        project: { ...state.project, activeSourceId: action.sourceId },
+        selectedMarkerId: null,
+      };
+    case "MARKER_SELECTED":
+      return { ...state, selectedMarkerId: action.markerId };
     case "FPS_CHANGED":
       return { ...state, project: { ...state.project, fps: action.fps } };
     case "ROUNDING_CHANGED":

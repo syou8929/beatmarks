@@ -10,7 +10,12 @@ import { EngineError, type EngineClient } from "./engineClient.js";
 import { extractAnalysisSources, extractPlaybackWav, probeMedia } from "./ffmpeg.js";
 import { tempDir } from "./paths.js";
 
-export class AnalyzeCancelledError extends Error {}
+export class AnalyzeCancelledError extends Error {
+  constructor(message?: string) {
+    super(message);
+    this.name = "AnalyzeCancelledError";
+  }
+}
 
 export interface AnalyzerDeps {
   engine: Pick<EngineClient, "analyze" | "cancelCurrent">;

@@ -5,6 +5,7 @@ import { createPlayback, type PlaybackEngine } from "./audio/playback.js";
 import { getIpc } from "./ipc.js";
 import { selectGrid, selectMarkers } from "./state/selectors.js";
 import { initialState, reducer } from "./state/store.js";
+import { STRINGS } from "./strings.js";
 
 const box: React.CSSProperties = {
   background: "#14171c", border: "1px solid #262c36", borderRadius: 8, padding: 16,
@@ -66,11 +67,14 @@ export function App(): React.JSX.Element {
   async function startAnalyze(filePath: string, input: InputConfig): Promise<void> {
     dispatch({ type: "ANALYZE_STARTED" });
     try {
-      const project = await getIpc().analyzeMedia({ filePath, input });
-      dispatch({ type: "PROJECT_READY", project });
+      const outcome = await getIpc().analyzeMedia({ filePath, input });
+      if (outcome.cancelled) {
+        dispatch({ type: "RESET" }); // キャンセルは静かにドロップ画面へ
+        return;
+      }
+      dispatch({ type: "PROJECT_READY", project: outcome.project });
     } catch (err) {
-      alert(`解析に失敗しました: ${String(err)}`);
-      dispatch({ type: "RESET" });
+      dispatch({ type: "ANALYZE_FAILED", message: `${STRINGS.error.analyzeFailed}: ${String(err)}` });
     }
   }
 
@@ -119,6 +123,22 @@ export function App(): React.JSX.Element {
           </div>
           <button style={{ marginTop: 12 }} onClick={() => void getIpc().cancelAnalyze()}>
             キャンセル
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.phase === "error") {
+    return (
+      <div style={{ display: "grid", placeItems: "center", height: "100vh" }}>
+        <div style={{ ...box, width: 460, textAlign: "center" }}>
+          <div style={{ fontWeight: 700, color: "#ff6b6b" }}>{STRINGS.error.title}</div>
+          <div style={{ marginTop: 10, fontSize: 12, opacity: 0.85, lineHeight: 1.6 }}>
+            {state.errorMessage}
+          </div>
+          <button style={{ marginTop: 16 }} onClick={() => dispatch({ type: "RESET" })}>
+            {STRINGS.error.back}
           </button>
         </div>
       </div>

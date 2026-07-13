@@ -57,6 +57,12 @@ export interface AnalyzedProject {
   sources: AnalyzedSource[];
 }
 
+/** analyzeMedia の戻り。キャンセルは IPC 越えでも判別できるセンチネルにする
+ *  (renderer 側でエラー同一性/メッセージ照合をしないための境界変換)。 */
+export type AnalyzeOutcome =
+  | { cancelled: false; project: AnalyzedProject }
+  | { cancelled: true };
+
 export interface AnalyzeProgressEvent {
   sourceLabel: string;
   sourceIndex: number;
@@ -93,7 +99,7 @@ export interface WriteExportsResult {
 
 export interface IpcApi {
   probeMedia(filePath: string): Promise<ProbeResult>;
-  analyzeMedia(req: AnalyzeRequest): Promise<AnalyzedProject>;
+  analyzeMedia(req: AnalyzeRequest): Promise<AnalyzeOutcome>;
   cancelAnalyze(): Promise<void>;
   readFileBytes(path: string): Promise<ArrayBuffer>;
   saveProject(state: ProjectFileState, toPath: string | null): Promise<string>;
