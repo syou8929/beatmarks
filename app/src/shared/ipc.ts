@@ -99,4 +99,5 @@ export interface IpcApi {
   saveProject(state: ProjectFileState, toPath: string | null): Promise<string>;
   openProject(): Promise<{ path: string; state: ProjectFileState } | null>;
   writeExports(files: ExportFilePayload[], dir: string | null): Promise<WriteExportsResult>;
+  getPathForFile(file: File): string;
 }

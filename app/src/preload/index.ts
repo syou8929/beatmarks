@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 import { IPC_CHANNELS, IPC_EVENTS, type AnalyzeProgressEvent, type AnalyzeRequest, type ExportFilePayload, type IpcApi, type ProjectFileState } from "../shared/ipc.js";
 
@@ -14,6 +14,7 @@ const api: IpcApi & {
   openProject: () => ipcRenderer.invoke(IPC_CHANNELS.openProject),
   writeExports: (files: ExportFilePayload[], dir) =>
     ipcRenderer.invoke(IPC_CHANNELS.writeExports, files, dir),
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
   onAnalyzeProgress: (cb) => {
     const listener = (_e: unknown, ev: AnalyzeProgressEvent) => cb(ev);
     ipcRenderer.on(IPC_EVENTS.analyzeProgress, listener);
