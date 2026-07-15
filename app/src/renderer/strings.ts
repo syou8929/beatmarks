@@ -82,6 +82,7 @@ export const STRINGS = {
     defaultLabel: "新規セクション",
     rename: "リネーム",
     delete: "削除",
+    deleteGlyph: "×",
   },
   hitLane: {
     tag: "ヒット検出レーン",
