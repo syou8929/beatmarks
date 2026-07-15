@@ -7,12 +7,16 @@ import { barsOf } from "../../shared/deriveGrid.js";
 import { fpsLabel } from "../../shared/timebase.js";
 import type { Fps } from "../../shared/types.js";
 import type { PlaybackEngine } from "../audio/playback.js";
+import type { SnapMode } from "../editor/snap.js";
 import { tapsToBpm } from "../editor/tapTempo.js";
 import { formatTime } from "../editor/timeFormat.js";
 import { useViewStore } from "../state/viewStore.js";
 import { STRINGS } from "../strings.js";
 
 const S = STRINGS.transport;
+// スペック §7: マーカー・境界・アンカーのドラッグのスナップ対象(拍/小節/フレーム/なし)を
+// ツールバーで切替(⌘/Ctrl 押下時の一時解除は各ドラッグ側=SectionBand/WaveCanvas が個別に処理)。
+const SNAP_MODES: SnapMode[] = ["beat", "bar", "frame", "none"];
 
 const groupStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 6, background: "#191d24",
@@ -134,6 +138,20 @@ export function Transport(props: TransportProps): React.JSX.Element {
       <div style={groupStyle}>
         <span style={{ color: "#5a6272", fontSize: 10 }}>{S.addGroup}</span>
         <button style={btn} onClick={() => props.onAddMarker(playback.currentTime())}>{S.addMarker}</button>
+      </div>
+
+      <div style={groupStyle}>
+        <span style={{ color: "#5a6272", fontSize: 10 }}>{STRINGS.snap.label}</span>
+        {SNAP_MODES.map((mode) => (
+          <button
+            key={mode}
+            style={view.snapMode === mode ? toggled : btn}
+            aria-pressed={view.snapMode === mode}
+            onClick={() => dispatch({ type: "SET_SNAP", mode })}
+          >
+            {STRINGS.snap[mode]}
+          </button>
+        ))}
       </div>
     </div>
   );

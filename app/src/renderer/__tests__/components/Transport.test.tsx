@@ -6,7 +6,7 @@ import React from "react";
 import { FPS_PRESETS } from "../../../shared/timebase.js";
 import type { PlaybackEngine } from "../../audio/playback.js";
 import { Transport } from "../../components/Transport.js";
-import { ViewStoreProvider } from "../../state/viewStore.js";
+import { useViewStore, ViewStoreProvider, type ViewState } from "../../state/viewStore.js";
 import { STRINGS } from "../../strings.js";
 
 function fakePlayback(over: Partial<PlaybackEngine> = {}): PlaybackEngine {
@@ -116,6 +116,55 @@ describe("Transport", () => {
       } finally {
         perfSpy.mockRestore();
       }
+    });
+  });
+
+  // T12レビュー修正(台帳): SET_SNAP + STRINGS.snap は存在したがツールバーが未配線だった
+  // (スペック §7: スナップ対象=拍/小節/フレーム/なしをツールバーで切替)。WaveCanvas/SectionBand は
+  // どちらも snapMode を prop としてではなく viewStore 経由(useViewStore/snap関数のクロージャ)で
+  // 受け取るため、ここでは Probe コンポーネント(WaveCanvas.test.tsx と同じパターン)で
+  // ViewStoreProvider 配下の実際の view state を直接検証する。
+  describe("スナップ切替ツールバー", () => {
+    function renderWithProbe(pb: PlaybackEngine) {
+      let store: ViewState | null = null;
+      function Probe(): React.JSX.Element | null {
+        store = useViewStore().view;
+        return null;
+      }
+      render(
+        <ViewStoreProvider>
+          <Probe />
+          <Transport playback={pb} grid={[]} fps={FPS_PRESETS["30"]!} isPlaying={false} onAddMarker={vi.fn()} onTapTempo={vi.fn()} />
+        </ViewStoreProvider>,
+      );
+      return { getSnapMode: () => store!.snapMode };
+    }
+
+    it("既定値は拍(beat)。各ボタンのクリックで viewStore の snapMode が切り替わる", () => {
+      const { getSnapMode } = renderWithProbe(fakePlayback());
+      expect(getSnapMode()).toBe("beat");
+
+      fireEvent.click(screen.getByText(STRINGS.snap.bar));
+      expect(getSnapMode()).toBe("bar");
+
+      fireEvent.click(screen.getByText(STRINGS.snap.frame));
+      expect(getSnapMode()).toBe("frame");
+
+      fireEvent.click(screen.getByText(STRINGS.snap.none));
+      expect(getSnapMode()).toBe("none");
+
+      fireEvent.click(screen.getByText(STRINGS.snap.beat));
+      expect(getSnapMode()).toBe("beat");
+    });
+
+    it("現在の snapMode に対応するボタンだけが aria-pressed=true になる(現在値の強調表示)", () => {
+      renderWithProbe(fakePlayback());
+      expect(screen.getByText(STRINGS.snap.beat).getAttribute("aria-pressed")).toBe("true");
+      expect(screen.getByText(STRINGS.snap.bar).getAttribute("aria-pressed")).toBe("false");
+
+      fireEvent.click(screen.getByText(STRINGS.snap.bar));
+      expect(screen.getByText(STRINGS.snap.bar).getAttribute("aria-pressed")).toBe("true");
+      expect(screen.getByText(STRINGS.snap.beat).getAttribute("aria-pressed")).toBe("false");
     });
   });
 });

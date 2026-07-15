@@ -11,7 +11,6 @@ import type { Action, AppState, MarkerSelection } from "../state/store.js";
 import { runExportFlow, type ExportOpts } from "../state/exportFlow.js";
 import type { PlaybackEngine } from "../audio/playback.js";
 import { keyToCommand, nudgeAction, seekTarget, type KeyCommand } from "../editor/keymap.js";
-import { sectionIndexFromMarkerId } from "../editor/markerTableModel.js";
 import { snapSec } from "../editor/snap.js";
 import type { PeakSet } from "../editor/peaks.js";
 import type { Viewport } from "../editor/waveGeom.js";
@@ -309,11 +308,7 @@ function EditorBody({ state, dispatch, playback }: EditorScreenProps): React.JSX
             sections={sectionViews} viewport={viewport} barIntervalSec={barIntervalSec} playheadSec={playheadSec}
             snap={snapForBoundary}
             onMoveBoundary={(index, sec) => guardedDispatch({ type: "SECTION_EDIT_ADDED", op: { op: "move", index, startSec: sec } })}
-            onRename={(arrayIdx, label) => {
-              const id = sectionViews[arrayIdx]?.id;
-              const idx = id ? sectionIndexFromMarkerId(id, active.analysis.sections.length) : null;
-              if (idx !== null) guardedDispatch({ type: "SECTION_EDIT_ADDED", op: { op: "rename", index: idx, label } });
-            }}
+            onRename={(index, label) => guardedDispatch({ type: "SECTION_EDIT_ADDED", op: { op: "rename", index, label } })}
             onDelete={(id) => guardedDispatch({ type: "MARKER_DELETED", id })}
             onAddAtPlayhead={() => guardedDispatch({ type: "SECTION_EDIT_ADDED", op: { op: "add", startSec: playheadSec, label: STRINGS.section.defaultLabel, color: "#5b7fd4" } })}
           />

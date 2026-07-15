@@ -39,7 +39,8 @@ export function App(): React.JSX.Element {
     setPlayback(pb);
     void getIpc()
       .readFileBytes(state.project.playbackWavPath)
-      .then((bytes) => pb.load(bytes));
+      .then((bytes) => pb.load(bytes))
+      .catch((err) => alert(`${STRINGS.drop.loadFailed}: ${String(err)}`)); // onDropと同じreadFileBytes失敗時の見せ方に揃える
     return () => { pb.dispose(); playbackRef.current = null; setPlayback(null); };
     // playbackWavPathが変わるのは新プロジェクト時のみ
   }, [state.phase === "editor" ? state.project.playbackWavPath : null]);
@@ -139,7 +140,7 @@ export function App(): React.JSX.Element {
               width: `${p?.percent ?? 0}%`, transition: "width .2s",
             }} />
           </div>
-          <button style={{ marginTop: 12 }} onClick={() => void getIpc().cancelAnalyze()}>
+          <button style={{ marginTop: 12 }} onClick={() => void getIpc().cancelAnalyze().catch(console.error)}>
             {STRINGS.analyzing.cancel}
           </button>
           <div style={{ marginTop: 6, fontSize: 10, color: "#5a6272" }}>{STRINGS.analyzing.cancelNote}</div>
