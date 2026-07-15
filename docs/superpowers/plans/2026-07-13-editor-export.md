@@ -5972,6 +5972,10 @@ Claude-Session: https://claude.ai/code/session_01SR5fj8BNeN6TUFgoj4zhm6"
 
 ### Task 12: エディタ統合+ショートカット+仕上げ
 
+> **完了(2026-07-13, commits 4f098fb + 46de2e5)**: レビュー(opus) verdict Yes・479/479。累積義務10件すべて消化(失敗様態を突くテスト付き): selectedMarker {sourceId,markerId} 化(幻ハイライト回帰3層) / 書き出し静黙全滅チェーン3層で閉鎖 / isPlaying 単一ソース(rAFポーリング) / タップテンポRTL+onEndedネガティブ / peaksWorker配線(ビルドでchunk確認) / dirty-open確認 / find(...)!防御 / ソース横断undoタブ切替+トースト / stereo-splitゲート+抽出中インジケータ / ショートカット全域+テキスト入力ガード / HitLanesドラフト→確定コミット(undo1エントリ/リリース)。
+> **⌘Z二重所有(レビューImportant)**: カスタムアクセラレータはテキスト入力中もメニュー側が発火する(macOSのシステムメニューキー等価。registerAcceleratorはWin/Linuxのみ)ため、**レンダラーwindowリスナー(テキストガード付き)を単独所有者にし、undo/redoメニュー項目のacceleratorを除去**(クリックは残置)。③c E2E で「1押下=1undo」をパッケージ実機検証すること(manual-qa-editor.md 80-81行に既記載)。
+> **③cへ**: ソースタブ切替は波形/音声を変えない(playbackWavPath単一 — 意図確認) / nudgeキーリピートのundo洪水(コメント済) / 再生WAVのIPC二重読み / WaveCanvasアンカードラッグの30fpsハードコード(project.fps化)。
+
 > T4-T10 を組み立て、ショートカット・ソースタブ・トースト・仕上げ(抽出インジケータ/stereo-split ゲーティング/防御化)を入れて End-to-End を成立させる。
 
 **Files:**
