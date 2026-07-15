@@ -43,4 +43,92 @@ describe("parseEngineResult", () => {
     expect(e.customMarkers).toEqual([]);
     expect(e.deletedMarkerIds).toEqual([]);
   });
+
+  // レビュー指摘(Important): sections/hits/silences 配列の要素検証深化。
+  // 再現したTypeError: analysis.sections/hits:[null] は deriveMarkers.ts の
+  // `analysis.sections.map((s) => ...)` / `analysis.hits.forEach((h) => ...)` で
+  // 最初の描画時にクラッシュしていた。
+  describe("sections/hits/silences の要素検証(レビュー再現)", () => {
+    function baseAnalysis(): Record<string, unknown> {
+      return {
+        durationSec: 10, tempoMode: "fixed", bpm: 120, gridOffsetSec: 0.1, beats: [0.1, 0.6],
+        downbeatPhase: 0, tempoMap: [],
+        key: { global: { name: "C major", camelot: "8B", confidence: 1 }, perSection: [] },
+        sections: [{ startSec: 0, endSec: 10, label: "A", clusterId: 0, chorusCandidate: false }],
+        hits: [{ timeSec: 1, band: "low", strength: 0.5 }],
+        silences: [{ startSec: 2, endSec: 3, floorDb: -50 }],
+        envelopes: { sampleRateHz: 100, total: [0.1], low: [0.1], mid: [0.1], high: [0.1] },
+      };
+    }
+    function wrap(a: Record<string, unknown>): string {
+      return JSON.stringify({ analysis: a, warnings: [] });
+    }
+    function expectTypedError(fn: () => void, pattern: RegExp): void {
+      let caught: unknown;
+      try { fn(); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(ValidationError);
+      expect(caught).not.toBeInstanceOf(TypeError);
+      expect((caught as Error).message).toMatch(pattern);
+    }
+
+    it("baseAnalysisの正常形は通る", () => {
+      expect(() => parseEngineResult(wrap(baseAnalysis()))).not.toThrow();
+    });
+
+    it("sections:[null] はTypeErrorでなくValidationError(レビュー再現)", () => {
+      expectTypedError(
+        () => parseEngineResult(wrap({ ...baseAnalysis(), sections: [null] })),
+        /sections/,
+      );
+    });
+    it("sections[].startSec 欠落を検出", () => {
+      const a = { ...baseAnalysis(), sections: [{ label: "A" }] };
+      expect(() => parseEngineResult(wrap(a))).toThrow(/sections\[0\]\.startSec/);
+    });
+    it("sections[].label 欠落を検出", () => {
+      const a = { ...baseAnalysis(), sections: [{ startSec: 0 }] };
+      expect(() => parseEngineResult(wrap(a))).toThrow(/sections\[0\]\.label/);
+    });
+
+    it("hits:[null] はTypeErrorでなくValidationError(レビュー再現)", () => {
+      expectTypedError(
+        () => parseEngineResult(wrap({ ...baseAnalysis(), hits: [null] })),
+        /hits/,
+      );
+    });
+    it("hits[].timeSec 欠落を検出", () => {
+      const a = { ...baseAnalysis(), hits: [{ band: "low", strength: 0.5 }] };
+      expect(() => parseEngineResult(wrap(a))).toThrow(/hits\[0\]\.timeSec/);
+    });
+    it("hits[].band 列挙外を検出", () => {
+      const a = { ...baseAnalysis(), hits: [{ timeSec: 1, band: "bogus", strength: 0.5 }] };
+      expect(() => parseEngineResult(wrap(a))).toThrow(/hits\[0\]\.band/);
+    });
+    it("hits[].strength 欠落を検出", () => {
+      const a = { ...baseAnalysis(), hits: [{ timeSec: 1, band: "low" }] };
+      expect(() => parseEngineResult(wrap(a))).toThrow(/hits\[0\]\.strength/);
+    });
+
+    it("silences:[null] はTypeErrorでなくValidationError", () => {
+      expectTypedError(
+        () => parseEngineResult(wrap({ ...baseAnalysis(), silences: [null] })),
+        /silences/,
+      );
+    });
+    it("silences[].startSec 欠落を検出", () => {
+      const a = { ...baseAnalysis(), silences: [{ endSec: 3 }] };
+      expect(() => parseEngineResult(wrap(a))).toThrow(/silences\[0\]\.startSec/);
+    });
+    it("silences[].endSec 欠落を検出", () => {
+      const a = { ...baseAnalysis(), silences: [{ startSec: 2 }] };
+      expect(() => parseEngineResult(wrap(a))).toThrow(/silences\[0\]\.endSec/);
+    });
+
+    it("実エンジンfixtureは要素検証後も通る(回帰確認)", () => {
+      const r = parseEngineResult(readFileSync(FIXTURE, "utf-8"));
+      expect(r.analysis.sections.length).toBeGreaterThan(0);
+      expect(r.analysis.hits.length).toBeGreaterThan(0);
+      expect(r.analysis.silences).toEqual([]);
+    });
+  });
 });

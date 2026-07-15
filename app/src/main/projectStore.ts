@@ -12,6 +12,44 @@ function validateAnalysis(a: unknown, path: string): void {
   catch (e) { throw new Error(`${path}: ${e instanceof Error ? e.message : String(e)}`); }
 }
 
+const SECTION_EDIT_OPS = new Set(["move", "rename", "recolor", "delete", "add"]);
+
+/** SectionEdit 要素の検証(レビュー再現: sectionEdits:[null] で deriveMarkers.ts の
+ *  `for (const e of edits.sectionEdits) { if (e.op === "add")` が TypeError になる)。
+ *  shared/types.ts の SectionEdit 判別共用体に沿って op ごとの必須フィールドのみを
+ *  最小限検証する(index の範囲外はderiveMarkers側で無視される既定動作のため、
+ *  ここでは型のみ見る)。 */
+function validateSectionEdit(raw: unknown, path: string): void {
+  if (typeof raw !== "object" || raw === null) throw new Error(`${path} が不正です`);
+  const e = raw as Record<string, unknown>;
+  const op = e["op"];
+  if (typeof op !== "string" || !SECTION_EDIT_OPS.has(op)) throw new Error(`${path}.op が不正です`);
+  if (op === "add") {
+    if (!isNum(e["startSec"])) throw new Error(`${path}.startSec が不正です`);
+    if (typeof e["label"] !== "string") throw new Error(`${path}.label が不正です`);
+    if (typeof e["color"] !== "string") throw new Error(`${path}.color が不正です`);
+    return;
+  }
+  if (!isInt(e["index"]) || (e["index"] as number) < 0) throw new Error(`${path}.index が不正です`);
+  if (op === "move" && !isNum(e["startSec"])) throw new Error(`${path}.startSec が不正です`);
+  if (op === "rename" && typeof e["label"] !== "string") throw new Error(`${path}.label が不正です`);
+  if (op === "recolor" && typeof e["color"] !== "string") throw new Error(`${path}.color が不正です`);
+}
+
+/** customMarkers 要素の検証(レビュー再現同様のクラス: 壊れた要素はderiveMarkers.ts
+ *  の `out.push({ ...c, sourceId, source: "user" })` をそのまま素通りしてしまい、
+ *  id/timeSec/label欠落のマーカーが描画・書き出しパイプラインに混入する)。
+ *  shared/types.ts の Marker のうち、deriveMarkers/consumers が実際に読む
+ *  id・timeSec・label・type(常に "custom")だけを最小限検証する。 */
+function validateCustomMarker(raw: unknown, path: string): void {
+  if (typeof raw !== "object" || raw === null) throw new Error(`${path} が不正です`);
+  const m = raw as Record<string, unknown>;
+  if (typeof m["id"] !== "string") throw new Error(`${path}.id が不正です`);
+  if (!isNum(m["timeSec"])) throw new Error(`${path}.timeSec が不正です`);
+  if (typeof m["label"] !== "string") throw new Error(`${path}.label が不正です`);
+  if (m["type"] !== "custom") throw new Error(`${path}.type が不正です`);
+}
+
 function validateEditState(raw: unknown, path: string): void {
   if (typeof raw !== "object" || raw === null) throw new Error(`${path} が不正です`);
   const e = raw as Record<string, unknown>;
@@ -34,8 +72,15 @@ function validateEditState(raw: unknown, path: string): void {
   if (!st || typeof st !== "object" || !isNum(st["db"]) || !isNum(st["minDurSec"])) {
     throw new Error(`${path}.silenceThreshold が不正です`);
   }
-  for (const k of ["sectionEdits", "customMarkers", "deletedMarkerIds"]) {
-    if (!Array.isArray(e[k])) throw new Error(`${path}.${k} が不正です`);
+  const sectionEdits = e["sectionEdits"];
+  if (!Array.isArray(sectionEdits)) throw new Error(`${path}.sectionEdits が不正です`);
+  sectionEdits.forEach((se, i) => validateSectionEdit(se, `${path}.sectionEdits[${i}]`));
+  const customMarkers = e["customMarkers"];
+  if (!Array.isArray(customMarkers)) throw new Error(`${path}.customMarkers が不正です`);
+  customMarkers.forEach((m, i) => validateCustomMarker(m, `${path}.customMarkers[${i}]`));
+  const deletedMarkerIds = e["deletedMarkerIds"];
+  if (!Array.isArray(deletedMarkerIds) || !deletedMarkerIds.every((x) => typeof x === "string")) {
+    throw new Error(`${path}.deletedMarkerIds が不正です`);
   }
 }
 
@@ -81,7 +126,18 @@ export function validateProjectFile(raw: unknown): ProjectFileState {
   if (typeof o["durationSec"] !== "number") throw new Error(".bmk の durationSec が不正です");
   validateInputConfig(o["input"], ".bmk の input");
   if (!Array.isArray(o["sources"])) throw new Error(".bmk の sources が不正です");
-  (o["sources"] as unknown[]).forEach(validateSource);
+  const sources = o["sources"] as unknown[];
+  sources.forEach(validateSource);
+  // 相互参照検証(レビュー再現: activeSourceId:"DOES_NOT_EXIST" で
+  // App.tsx の `state.project.sources.find(...)!` が undefined を non-null 表明して
+  // TypeError になる)。validateSource が既に各要素の source.id を string と確認済み
+  // なのでここでは安全に集合化できる。
+  const sourceIds = new Set(
+    sources.map((s) => ((s as Record<string, unknown>)["source"] as Record<string, unknown>)["id"]),
+  );
+  if (!sourceIds.has(o["activeSourceId"])) {
+    throw new Error(".bmk の activeSourceId が sources に存在しません");
+  }
   const ui = o["ui"] as Record<string, unknown> | undefined;
   if (!ui || typeof ui !== "object" || Array.isArray(ui)) throw new Error(".bmk の ui が不正です");
   const fps = ui["fps"] as Record<string, unknown> | undefined;

@@ -10,15 +10,28 @@ import { STRINGS } from "../strings.js";
 
 export function useProjectFile(state: AppState, dispatch: (a: Action) => void): void {
   useEffect(() => {
+    // save/saveAs の結果処理を共通化。main の saveProject(main/index.ts)は保存ダイアログが
+    // キャンセルされると Error("保存がキャンセルされました") を投げる契約になっており、
+    // これは異常系ではなくごく普通の操作なので、他のIPC呼び出し失敗と同様に扱って
+    // unhandled rejection にしてしまうのではなく、無音で無視する(isDirtyは維持=次の
+    // 保存操作を促す)。メッセージ文字列での判定は暫定実装 — ③cでmain側がSaveOutcome等の
+    // 型付き結果を返すよう変更し、message-sniffingをやめるのが望ましい。
+    async function finishSave(pathPromise: Promise<string>): Promise<void> {
+      try {
+        const path = await pathPromise;
+        dispatch({ type: "SAVED", path });
+      } catch (err) {
+        if (err instanceof Error && err.message.includes("キャンセル")) return;
+        alert(String(err));
+      }
+    }
     async function save(): Promise<void> {
       if (state.phase !== "editor") return;
-      const path = await getIpc().saveProject(toProjectFileState(state.project), state.projectPath);
-      dispatch({ type: "SAVED", path });
+      await finishSave(getIpc().saveProject(toProjectFileState(state.project), state.projectPath));
     }
     async function saveAs(): Promise<void> {
       if (state.phase !== "editor") return;
-      const path = await getIpc().saveProject(toProjectFileState(state.project), null);
-      dispatch({ type: "SAVED", path });
+      await finishSave(getIpc().saveProject(toProjectFileState(state.project), null));
     }
     function load(outcome: OpenProjectOutcome | null): void {
       if (!outcome) return;

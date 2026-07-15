@@ -18,6 +18,23 @@ function numArray(x: unknown, name: string): number[] {
   return x as number[];
 }
 
+function isObj(x: unknown): x is Record<string, unknown> {
+  return typeof x === "object" && x !== null;
+}
+
+/** 要素がnullでないオブジェクトであることだけをまず保証する(レビュー再現:
+ *  sections/hits:[null] で deriveMarkers.ts が要素を直接読み TypeError になる)。
+ *  各要素のフィールド検査は呼び出し側の check で行う。 */
+function objArray(
+  x: unknown, name: string, check: (el: Record<string, unknown>, i: number) => void,
+): void {
+  if (!Array.isArray(x)) fail(`${name} must be array`);
+  x.forEach((el, i) => {
+    if (!isObj(el)) fail(`${name}[${i}] must be object`);
+    check(el, i);
+  });
+}
+
 export function parseEngineResult(jsonText: string): EngineResult {
   let raw: unknown;
   try {
@@ -44,9 +61,25 @@ export function parseEngineResult(jsonText: string): EngineResult {
   if (!key || typeof key !== "object" || !key["global"] || !Array.isArray(key["perSection"])) {
     fail("key");
   }
-  if (!Array.isArray(a["sections"])) fail("sections");
-  if (!Array.isArray(a["hits"])) fail("hits");
-  if (!Array.isArray(a["silences"])) fail("silences");
+  // 要素検証(レビュー再現: sections/hits:[null] で deriveMarkers.ts の
+  // `analysis.sections.map((s) => ({ startSec: s.startSec, ... }))` /
+  // `analysis.hits.forEach((h) => { if (h.strength < ...) ... })` が
+  // TypeErrorになる)。deriveMarkers が実際に読むフィールドだけを最小限検証する
+  // (real engine 出力 = engine/beatmarks_engine の structure.py/hits.py/envelope.py
+  //  はここで見る全フィールドを常に付与するので、実出力は必ず通る)。
+  objArray(a["sections"], "sections", (s, i) => {
+    if (!isNum(s["startSec"])) fail(`sections[${i}].startSec`);
+    if (typeof s["label"] !== "string") fail(`sections[${i}].label`);
+  });
+  objArray(a["hits"], "hits", (h, i) => {
+    if (!isNum(h["timeSec"])) fail(`hits[${i}].timeSec`);
+    if (h["band"] !== "low" && h["band"] !== "mid" && h["band"] !== "high") fail(`hits[${i}].band`);
+    if (!isNum(h["strength"])) fail(`hits[${i}].strength`);
+  });
+  objArray(a["silences"], "silences", (s, i) => {
+    if (!isNum(s["startSec"])) fail(`silences[${i}].startSec`);
+    if (!isNum(s["endSec"])) fail(`silences[${i}].endSec`);
+  });
   const env = a["envelopes"] as Record<string, unknown> | undefined;
   if (!env || !isNum(env["sampleRateHz"])) fail("envelopes");
   for (const band of ["total", "low", "mid", "high"]) {

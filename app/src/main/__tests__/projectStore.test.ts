@@ -4,10 +4,23 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { ProjectFileState } from "../../shared/ipc.js";
+import type { AnalysisResult } from "../../shared/types.js";
+import { defaultEditState } from "../../shared/validate.js";
 import { openProjectFrom, saveProjectTo, validateProjectFile } from "../projectStore.js";
 
 const dir = mkdtempSync(join(tmpdir(), "bmproj-"));
 
+function analysis(): AnalysisResult {
+  return {
+    durationSec: 30, tempoMode: "fixed", bpm: 120, gridOffsetSec: 0.25, beats: [0.25], downbeatPhase: 0,
+    tempoMap: [], key: { global: { name: "C major", camelot: "8B", confidence: 1 }, perSection: [] },
+    sections: [], hits: [], silences: [], envelopes: { sampleRateHz: 100, total: [], low: [], mid: [], high: [] },
+  };
+}
+
+// sources を空にせず activeSourceId="mix" と整合させる(台帳追加要件: activeSourceId の
+// 相互参照検証を導入したため、以前の sources:[] + activeSourceId:"mix" という
+// 内部矛盾したフィクスチャは validateProjectFile を通らなくなった)。
 function state(): ProjectFileState {
   return {
     version: 1,
@@ -16,7 +29,7 @@ function state(): ProjectFileState {
     baseName: "track",
     durationSec: 30,
     input: { mode: "mix", trackIndexes: [0], channelSplit: "mono" },
-    sources: [],
+    sources: [{ source: { id: "mix", kind: "mix", label: "2mix" }, analysis: analysis(), edits: defaultEditState() }],
     activeSourceId: "mix",
     ui: { fps: { num: 30, den: 1 }, rounding: "nearest" },
   };
