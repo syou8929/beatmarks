@@ -4046,6 +4046,10 @@ Claude-Session: https://claude.ai/code/session_01SR5fj8BNeN6TUFgoj4zhm6"
 ---
 ### Task 9: マーカーテーブル+手動マーカー
 
+> **完了(2026-07-13, commit b0b684d)**: レビュー verdict Yes・366/366。計画サンプル自体のバグ4件を実装者が発見(レビューが隔離環境で全再現確認): ①ラベルtdの無条件stopPropagationが計画自身のテストを破壊 ②activeRefガード欠落 ③復元ビューが型フィルタを通り既定OFFのbeatが復元不能(計画自身のテスト失敗) ④型チェック不能なテスト行。拡張作業の自己発見バグ2件: 非アクティブソース行の削除がアクティブソースの同IDマーカーを破壊→isMutableガード / React key衝突→`${sourceId}:${id}`。store に CUSTOM_MARKER_UPDATED(id等値、undoable)/MARKER_RESTORED 追加(両網羅switchに追加済み)。
+> **T12への必須指示(レビューの Important)**: **selectedMarkerId がソース非限定** — ID はソース内でしか一意でないため、ソース横断ビューで非アクティブ行を選択するとアクティブソースの同ID行も幻ハイライトされる(実証済み。HitLanes も同罹患)。T12 の配線時に MARKER_SELECTED/selectedMarkerId をソース限定化(store レベルで {sourceId, markerId} 化 or 選択IDに sourceId を合成)し、MarkerTable/HitLanes の等値比較を更新すること。
+> **③c/磨きへ**: 復元ビュー中の「全N件」が通常件数を表示 / cross+showDeleted 併用時にソース列が形骸化(復元は常にアクティブソースのみ)。
+
 **Files:**
 - Modify: `app/src/renderer/state/store.ts`(`CUSTOM_MARKER_UPDATED`/`MARKER_RESTORED` アクション追加)
 - Create: `app/src/renderer/editor/markerTableModel.ts`(純: 行の組立/フィルタ/ID解決)
