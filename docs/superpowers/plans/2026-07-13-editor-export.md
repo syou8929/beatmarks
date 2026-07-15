@@ -3349,6 +3349,9 @@ Claude-Session: https://claude.ai/code/session_01SR5fj8BNeN6TUFgoj4zhm6"
 
 ### Task 7: ヒットレーン+感度スライダー
 
+> **完了(2026-07-13, commit 75183ee)**: レビュー verdict Yes・328/328。正当逸脱: 計画本文が要求するのにコードが未実装だった deletedMarkerIds 非表示を追加(元添字プロベナンス厳守+回帰テスト) / role="button" ティックのキーボード操作(Enter/Space — 本コードベース初のWCAG 2.1.1対応) / STRINGS.hitLane 使用(ローカルSテーブル置換)。
+> **T12への追加指示**: (a) スライダーは input 毎に EDIT_APPLIED を dispatch し selectors が edits 参照で全再導出するため、実データ配線時にドラッグ性能を確認(必要なら onChange=ドラッグ終端コミット+視覚は local state 等) (b) HitLanes の dispatch 型 props は SectionBand のコールバック型と流儀が異なる — 配線時にどちらかへ寄せるか現状維持かを判断。
+
 **Files:**
 - Create: `app/src/renderer/editor/hitLaneModel.ts`(純ロジック: 表示ティックのフィルタ/座標)
 - Create: `app/src/renderer/components/HitLanes.tsx`
