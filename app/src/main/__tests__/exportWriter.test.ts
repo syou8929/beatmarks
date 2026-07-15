@@ -130,4 +130,39 @@ describe("writeExports", () => {
     expect(mid[i + 3]).toBe(6); // nn = beatsPerBar
     expect(mid[i + 4]).toBe(3); // dd = log2(8)
   });
+
+  // T12必須指示(台帳・レビューImportant #1): 書き出しの「静黙全滅」チェーンを閉じる。
+  // ソース毎セットアップ(buildExportContext/deriveMarkers)は以前 try/catch されておらず、
+  // 1ソースの不正データが writeExports 全体を reject させ、既に書けたはずの他ソースの結果まで
+  // 消していた。ここでは意図的に壊れた analysis(silences に endSec 欠落相当の不正値)を持つ
+  // ソースを混ぜ、他の正常なソースの結果はちゃんと written[] に返ることを検証する。
+  it("1ソースの解析データが不正でも他ソースは書き出され、不正ソースは failed[] に落ちる(静黙全滅の回帰)", async () => {
+    const goodSource = {
+      source: { id: "mix0", kind: "mix" as const, label: "2mix" },
+      analysis: engine.analysis, edits: defaultEditState(),
+    };
+    // envelopes.total を空にすると detectSilencesFromEnvelope 呼び出し自体は例外を投げないため、
+    // buildExportContext/deriveMarkers が確実に投げるよう analysis.sections を壊す
+    // (deriveMarkers の applySectionEdits は analysis.sections.map(...) を直接読む)。
+    const brokenAnalysis = { ...engine.analysis, sections: null as unknown as typeof engine.analysis.sections };
+    const badSource = {
+      source: { id: "mix1", kind: "mix" as const, label: "broken" },
+      analysis: brokenAnalysis, edits: defaultEditState(),
+    };
+    const r = req({
+      targets: ["json"],
+      sourceIds: ["mix0", "mix1"],
+      projectState: {
+        ...projectState(),
+        sources: [goodSource, badSource],
+        activeSourceId: "mix0",
+      },
+    });
+    const res = await writeExports(r, realDeps);
+    expect(res.written).toHaveLength(1);
+    expect(basename(res.written[0]!)).toBe("track_2mix_markers.json");
+    expect(res.failed).toHaveLength(1);
+    expect(res.failed[0]!.path).toBe("track_broken_markers.json");
+    expect(res.failed[0]!.message).toBeTruthy();
+  });
 });

@@ -17,11 +17,14 @@ function fakePlayback(over: Partial<PlaybackEngine> = {}): PlaybackEngine {
   };
 }
 
-function renderTransport(pb: PlaybackEngine, cb: { onAddMarker?: (s: number) => void; onTapTempo?: (b: number) => void } = {}) {
+function renderTransport(
+  pb: PlaybackEngine,
+  cb: { onAddMarker?: (s: number) => void; onTapTempo?: (b: number) => void; isPlaying?: boolean } = {},
+) {
   return render(
     <ViewStoreProvider>
       <Transport
-        playback={pb} grid={[]} fps={FPS_PRESETS["30"]!}
+        playback={pb} grid={[]} fps={FPS_PRESETS["30"]!} isPlaying={cb.isPlaying ?? false}
         onAddMarker={cb.onAddMarker ?? vi.fn()} onTapTempo={cb.onTapTempo ?? vi.fn()}
       />
     </ViewStoreProvider>,
@@ -44,12 +47,20 @@ describe("Transport", () => {
     expect(pb.setMetronome).toHaveBeenCalledWith(true);
   });
 
-  it("再生ボタンで play()、再クリックで pause()", () => {
-    let flag = false;
-    const pb = fakePlayback({ play: vi.fn(() => { flag = true; }), pause: vi.fn(() => { flag = false; }), isPlaying: vi.fn(() => flag) });
-    renderTransport(pb);
+  // isPlaying は EditorScreen(親)が単一の情報源として渡す制御下プロパティ(T5レビュー契約・
+  // WaveCanvasと同じパターン)。Transport 自身はもうローカルに再生状態を持たないため、
+  // 「クリックでplay()を呼ぶ」ことと「isPlaying=trueのときpauseラベル+pause()を呼ぶ」ことを
+  // それぞれ isPlaying を明示して検証する(以前のようなクリック起因の内部トグルは無い)。
+  it("isPlaying=false のとき play ラベルを表示し、クリックで playback.play() を呼ぶ", () => {
+    const pb = fakePlayback({ isPlaying: () => false });
+    renderTransport(pb, { isPlaying: false });
     fireEvent.click(screen.getByText(STRINGS.transport.play));
     expect(pb.play).toHaveBeenCalled();
+  });
+
+  it("isPlaying=true のとき pause ラベルを表示し、クリックで playback.pause() を呼ぶ", () => {
+    const pb = fakePlayback({ isPlaying: () => true });
+    renderTransport(pb, { isPlaying: true });
     fireEvent.click(screen.getByText(STRINGS.transport.pause));
     expect(pb.pause).toHaveBeenCalled();
   });
@@ -62,5 +73,49 @@ describe("Transport", () => {
     expect(pb.setLoop).toHaveBeenLastCalledWith(10, expect.any(Number));
     fireEvent.click(loopBtn);
     expect(pb.setLoop).toHaveBeenLastCalledWith(null, null);
+  });
+
+  // T4への追加指示(台帳): タップテンポのコンポーネント配線RTLテスト(2秒リセット・onTapTempoガード)。
+  describe("タップテンポ", () => {
+    it("4回未満のタップでは onTapTempo を呼ばない(ガード)、4回目で呼ぶ", () => {
+      const onTapTempo = vi.fn();
+      const pb = fakePlayback();
+      let t = 0;
+      const perfSpy = vi.spyOn(performance, "now").mockImplementation(() => t);
+      renderTransport(pb, { onTapTempo });
+      const tapBtn = screen.getByText(STRINGS.transport.tapTempo);
+      try {
+        fireEvent.click(tapBtn); t = 500;
+        fireEvent.click(tapBtn); t = 1000;
+        fireEvent.click(tapBtn); t = 1500;
+        expect(onTapTempo).not.toHaveBeenCalled();
+        fireEvent.click(tapBtn);
+        expect(onTapTempo).toHaveBeenCalledTimes(1);
+        expect(onTapTempo.mock.calls[0]![0]).toBeCloseTo(120, 0); // 500ms間隔 = 120BPM
+      } finally {
+        perfSpy.mockRestore();
+      }
+    });
+
+    it("直前のタップから2秒以上空くとタップ系列がリセットされる(4回目でも呼ばれない)", () => {
+      const onTapTempo = vi.fn();
+      const pb = fakePlayback();
+      let t = 0;
+      const perfSpy = vi.spyOn(performance, "now").mockImplementation(() => t);
+      renderTransport(pb, { onTapTempo });
+      const tapBtn = screen.getByText(STRINGS.transport.tapTempo);
+      try {
+        fireEvent.click(tapBtn); t = 500;
+        fireEvent.click(tapBtn); t = 1000;
+        fireEvent.click(tapBtn); // ここで3タップ目(まだ4未満なので発火しない)
+        t = 3500; // 直前(1000)から2.5秒空ける(>2000ms)
+        fireEvent.click(tapBtn); // リセットされていれば「リセット後1タップ目」のはず
+        // リセットが効いていなければここは4タップ目になり onTapTempo が呼ばれてしまう。
+        // 呼ばれていないことがリセットの証拠。
+        expect(onTapTempo).not.toHaveBeenCalled();
+      } finally {
+        perfSpy.mockRestore();
+      }
+    });
   });
 });

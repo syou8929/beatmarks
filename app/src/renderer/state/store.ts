@@ -36,6 +36,18 @@ interface UndoEntry {
   edits: EditState;
 }
 
+/** 選択中マーカーのソース限定キー(T12必須修正・台帳)。マーカー id は解析配列添字ベースの
+ *  文字列(beat-0, sec-o0, hit-low-3, …)で「ソース内でのみ一意」(markerTableModel.ts の
+ *  isMutable コメントと同根)。選択状態を単なる markerId: string だけで持つと、ソース横断
+ *  ビュー(MarkerTable の crossSourceRows / HitLanes)で非アクティブソースの行を選択した際、
+ *  アクティブソース側にたまたま存在する同IDの行まで「選択中」として幻ハイライトされる
+ *  実害バグになる(レビューで実証済み)。選択は常にこの複合キーで持ち、消費側
+ *  (MarkerTable/HitLanes)は sourceId・markerId の両方が一致するときだけハイライトする。 */
+export interface MarkerSelection {
+  sourceId: string;
+  markerId: string;
+}
+
 export type AppState =
   | { phase: "drop" }
   | { phase: "input-config"; filePath: string; probe: import("../../shared/ipc.js").ProbeResult }
@@ -46,7 +58,7 @@ export type AppState =
       project: EditorProject;
       undo: UndoEntry[];
       redo: UndoEntry[];
-      selectedMarkerId: string | null;
+      selectedMarker: MarkerSelection | null;
       isDirty: boolean;
       projectPath: string | null;
     };
@@ -72,7 +84,7 @@ export type Action =
   | { type: "ROUNDING_CHANGED"; rounding: RoundingMode }
   | { type: "UNDO" }
   | { type: "ANALYZE_FAILED"; message: string }
-  | { type: "MARKER_SELECTED"; markerId: string | null }
+  | { type: "MARKER_SELECTED"; selection: MarkerSelection | null }
   | { type: "REDO" };
 
 const UNDO_LIMIT = 100;
@@ -164,7 +176,7 @@ export function reducer(state: AppState, action: Action): AppState {
           fps: { num: 30, den: 1 },
           rounding: "nearest",
         },
-        undo: [], redo: [], selectedMarkerId: null, isDirty: false, projectPath: null,
+        undo: [], redo: [], selectedMarker: null, isDirty: false, projectPath: null,
       };
     }
 
@@ -180,7 +192,7 @@ export function reducer(state: AppState, action: Action): AppState {
           activeSourceId: s.activeSourceId,
           fps: s.ui.fps, rounding: s.ui.rounding,
         },
-        undo: [], redo: [], selectedMarkerId: null, isDirty: false, projectPath: action.path,
+        undo: [], redo: [], selectedMarker: null, isDirty: false, projectPath: action.path,
       };
     }
 
@@ -259,10 +271,10 @@ export function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         project: { ...state.project, activeSourceId: action.sourceId },
-        selectedMarkerId: null,
+        selectedMarker: null,
       };
     case "MARKER_SELECTED":
-      return { ...state, selectedMarkerId: action.markerId };
+      return { ...state, selectedMarker: action.selection };
     case "FPS_CHANGED":
       return { ...state, project: { ...state.project, fps: action.fps }, isDirty: true };
     case "ROUNDING_CHANGED":

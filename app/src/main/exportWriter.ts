@@ -77,8 +77,25 @@ export async function writeExports(req: ExportRequest, deps: ExportWriterDeps): 
   const multiSource = sources.length > 1;
 
   for (const s of sources) {
-    const ctx = buildExportContext(req, s, multiSource);
-    const markers = deriveMarkers(s.analysis, s.edits, s.source.id);
+    // ソース毎セットアップ(buildExportContext/deriveMarkers)を try/catch する(T12必須指示・
+    // レビューImportant): 以前はここが無防備で、1ソースの不正なedits/analysisが例外を投げると
+    // writeExports 全体が reject し、既に書けたはずの他ソースの結果まで丸ごと消える「静黙全滅」
+    // になっていた(呼び出し側 ExportPanel/exportFlow にも catch が無かったためユーザーには何も
+    // 表示されない)。ここで失敗を吸収し、このソースの全ターゲット分を failed[] に積んで
+    // 次のソースへ続行する。
+    let ctx: ReturnType<typeof buildExportContext>;
+    let markers: ReturnType<typeof deriveMarkers>;
+    try {
+      ctx = buildExportContext(req, s, multiSource);
+      markers = deriveMarkers(s.analysis, s.edits, s.source.id);
+    } catch (e) {
+      const label = multiSource ? s.source.label : null;
+      const message = msg(e);
+      for (const target of req.targets) {
+        failed.push({ path: buildFileName(req.projectState.baseName, label, target as TargetKey), message });
+      }
+      continue;
+    }
     let cueWav: Promise<Uint8Array> | null = null;
 
     for (const target of req.targets) {

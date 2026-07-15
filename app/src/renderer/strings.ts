@@ -194,6 +194,8 @@ export const STRINGS = {
     continue: "続行",
     abort: "中止",
     mediaMissing: "元の音声ファイルが見つかりません",
+    discardDirtyTitle: "保存されていない変更があります",
+    discardDirty: "現在の変更を破棄して別のプロジェクトを開きますか?",
   },
   shortcuts: {
     playPause: "再生/停止",
@@ -201,6 +203,11 @@ export const STRINGS = {
     beatSeek: "拍単位シーク",
     undo: "取り消し",
     lanes: "レーン表示切替",
+  },
+  editor: {
+    crossSourceUndoToast: "別ソースの操作を取り消しました",
+    crossSourceRedoToast: "別ソースの操作をやり直しました",
+    loadingPlayback: "再生バッファを読み込み中…",
   },
 } as const;
 

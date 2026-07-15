@@ -2,9 +2,11 @@ import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
 
 import type { InputConfig } from "../shared/ipc.js";
 import { createPlayback, type PlaybackEngine } from "./audio/playback.js";
+import { EditorScreen } from "./components/EditorScreen.js";
+import { canStereoSplit } from "./editor/inputConfig.js";
 import { useProjectFile } from "./hooks/useProjectFile.js";
 import { getIpc } from "./ipc.js";
-import { selectGrid, selectMarkers } from "./state/selectors.js";
+import { selectGrid } from "./state/selectors.js";
 import { initialState, reducer } from "./state/store.js";
 import { STRINGS } from "./strings.js";
 
@@ -15,11 +17,12 @@ const box: React.CSSProperties = {
 export function App(): React.JSX.Element {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   // メニュー(開く/保存/別名/最近)とダーティ・タイトルの配線。フェーズ非依存に購読するため
-  // editor 到達前でも安全(T12でツールバー等に統合予定)。
+  // editor 到達前でも安全。
   useProjectFile(state, dispatch);
   const playbackRef = useRef<PlaybackEngine | null>(null);
-  const [metronome, setMetronome] = useState(false);
-  const [playing, setPlaying] = useState(false);
+  // EditorScreen へ prop として渡すため React state としても保持する(ref だけでは
+  // playback生成/破棄が再レンダーに反映されず、EditorScreenがずっとnullのままになる)。
+  const [playback, setPlayback] = useState<PlaybackEngine | null>(null);
 
   // 進捗イベント購読
   useEffect(() => {
@@ -33,20 +36,20 @@ export function App(): React.JSX.Element {
     if (state.phase !== "editor") return;
     const pb = createPlayback();
     playbackRef.current = pb;
+    setPlayback(pb);
     void getIpc()
       .readFileBytes(state.project.playbackWavPath)
       .then((bytes) => pb.load(bytes));
-    return () => { pb.dispose(); playbackRef.current = null; };
+    return () => { pb.dispose(); playbackRef.current = null; setPlayback(null); };
     // playbackWavPathが変わるのは新プロジェクト時のみ
   }, [state.phase === "editor" ? state.project.playbackWavPath : null]);
 
-  // グリッド変更をメトロノームへ反映
+  // グリッド変更をメトロノームへ反映(メトロノームのON/OFF自体はTransportが所有する)
   const grid = useMemo(
     () => selectGrid(state).map((b) => ({ timeSec: b.timeSec, isBar: b.isBar })),
     [state],
   );
   useEffect(() => { playbackRef.current?.updateGrid(grid); }, [grid]);
-  useEffect(() => { playbackRef.current?.setMetronome(metronome); }, [metronome]);
 
   async function onDrop(e: React.DragEvent): Promise<void> {
     e.preventDefault();
@@ -63,7 +66,7 @@ export function App(): React.JSX.Element {
         dispatch({ type: "FILE_PROBED", filePath: path, probe });
       }
     } catch (err) {
-      alert(`ファイルの読み込みに失敗しました: ${String(err)}`);
+      alert(`${STRINGS.drop.loadFailed}: ${String(err)}`);
       // phaseはまだ"drop"のままなので追加のdispatchは不要(ドロップ画面に留まる)
     }
   }
@@ -90,9 +93,12 @@ export function App(): React.JSX.Element {
         style={{ display: "grid", placeItems: "center", height: "100vh" }}
       >
         <div style={{ ...box, textAlign: "center", padding: 48 }}>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>BeatMarks</div>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>{STRINGS.app.name}</div>
           <div style={{ marginTop: 8, fontSize: 13, opacity: 0.75 }}>
-            音声・動画ファイルをここにドロップ
+            {STRINGS.drop.prompt}
+          </div>
+          <div style={{ marginTop: 4, fontSize: 11, opacity: 0.5 }}>
+            {STRINGS.drop.hint}
           </div>
         </div>
       </div>
@@ -102,9 +108,10 @@ export function App(): React.JSX.Element {
   if (state.phase === "input-config") {
     return (
       <InputConfigScreen
-        trackTitles={state.probe.tracks.map(
-          (t, i) => t.title ?? `Track ${i + 1}(${t.channels}ch)`,
-        )}
+        tracks={state.probe.tracks.map((t, i) => ({
+          title: t.title ?? `Track ${i + 1}(${t.channels}ch)`,
+          channels: t.channels,
+        }))}
         onStart={(input) => void startAnalyze(state.filePath, input)}
       />
     );
@@ -112,12 +119,19 @@ export function App(): React.JSX.Element {
 
   if (state.phase === "analyzing") {
     const p = state.progress;
+    // 抽出フェーズ中インジケータ(台帳UX注記): 最初の進捗イベントが来るまで、または
+    // stage==="extract" の間は「抽出中」表示にする(エンジンの解析ステージとは別扱い)。
+    const extracting = !p || p.stage === "extract";
     return (
       <div style={{ display: "grid", placeItems: "center", height: "100vh" }}>
         <div style={{ ...box, width: 420 }}>
-          <div style={{ fontWeight: 700 }}>解析中…</div>
+          <div style={{ fontWeight: 700 }}>{extracting ? STRINGS.analyzing.extracting : STRINGS.analyzing.title}</div>
           <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-            {p ? `${p.sourceLabel}(${p.sourceIndex + 1}/${p.sourceCount}): ${p.stage}` : "準備中"}
+            {!p
+              ? STRINGS.analyzing.preparing
+              : extracting
+                ? STRINGS.analyzing.extracting
+                : `${p.sourceLabel}(${p.sourceIndex + 1}/${p.sourceCount}): ${p.stage}`}
           </div>
           <div style={{ marginTop: 8, height: 6, background: "#262c36", borderRadius: 3 }}>
             <div style={{
@@ -126,8 +140,9 @@ export function App(): React.JSX.Element {
             }} />
           </div>
           <button style={{ marginTop: 12 }} onClick={() => void getIpc().cancelAnalyze()}>
-            キャンセル
+            {STRINGS.analyzing.cancel}
           </button>
+          <div style={{ marginTop: 6, fontSize: 10, color: "#5a6272" }}>{STRINGS.analyzing.cancelNote}</div>
         </div>
       </div>
     );
@@ -149,96 +164,46 @@ export function App(): React.JSX.Element {
     );
   }
 
-  // editor(開発用の確認画面 — 本UIは計画③b)
-  const active = state.project.sources.find(
-    (s) => s.source.id === state.project.activeSourceId,
-  )!;
-  const markers = selectMarkers(state);
-  return (
-    <div style={{ padding: 16, display: "grid", gap: 12 }}>
-      <div style={{ display: "flex", gap: 8 }}>
-        {state.project.sources.map((s) => (
-          <button
-            key={s.source.id}
-            style={{ fontWeight: s.source.id === state.project.activeSourceId ? 700 : 400 }}
-            onClick={() => dispatch({ type: "SOURCE_SWITCHED", sourceId: s.source.id })}
-          >
-            {s.source.label}
-          </button>
-        ))}
-      </div>
-      <div style={box}>
-        <b>{state.project.baseName}</b>(
-        {active.analysis.tempoMode === "fixed"
-          ? `BPM ${active.analysis.bpm?.toFixed(2)}`
-          : "可変テンポ"}
-        ・{active.analysis.key.global.name}({active.analysis.key.global.camelot})・
-        マーカー{markers.length}件・警告[{active.warnings.join(", ") || "なし"}]
-      </div>
-      <div style={{ ...box, display: "flex", gap: 8, alignItems: "center" }}>
-        <button onClick={() => {
-          const pb = playbackRef.current;
-          if (!pb) return;
-          if (pb.isPlaying()) { pb.pause(); setPlaying(false); }
-          else { pb.play(); setPlaying(true); }
-        }}>{playing ? "⏸ 停止" : "▶ 再生"}</button>
-        <label style={{ fontSize: 12 }}>
-          <input type="checkbox" checked={metronome}
-                 onChange={(e) => setMetronome(e.target.checked)} /> メトロノーム
-        </label>
-        <span style={{ fontSize: 12, opacity: 0.7 }}>
-          (拍グリッドの検証: クリック音がビートに合っていればOK)
-        </span>
-      </div>
-    </div>
-  );
+  return <EditorScreen state={state} dispatch={dispatch} playback={playback} />;
 }
 
 function InputConfigScreen(props: {
-  trackTitles: string[];
+  tracks: { title: string; channels: number }[];
   onStart: (input: InputConfig) => void;
 }): React.JSX.Element {
   const [selected, setSelected] = useState<number[]>([0]);
   const [mode, setMode] = useState<"mix" | "multitrack">("mix");
   const [split, setSplit] = useState<"mono" | "stereo-split">("mono");
+  const channels = props.tracks.map((t) => t.channels);
+  const stereoOk = canStereoSplit(selected, channels);
+  // 選択がモノだけになったら stereo-split を強制解除(台帳UX注記: probeのchannelsを参照して
+  // 実質ステレオの選択があるときだけ提示する)。
+  useEffect(() => { if (!stereoOk && split === "stereo-split") setSplit("mono"); }, [stereoOk, split]);
+
   return (
     <div style={{ display: "grid", placeItems: "center", height: "100vh" }}>
       <div style={{ ...box, width: 480, display: "grid", gap: 10 }}>
-        <b>入力設定(複数トラック検出)</b>
-        {props.trackTitles.map((t, i) => (
+        <b>{STRINGS.inputConfig.title}</b>
+        {props.tracks.map((t, i) => (
           <label key={i} style={{ fontSize: 13 }}>
-            <input
-              type="checkbox"
-              checked={selected.includes(i)}
-              onChange={(e) =>
-                setSelected(e.target.checked
-                  ? [...selected, i].sort()
-                  : selected.filter((x) => x !== i))
-              }
-            /> {t}
+            <input type="checkbox" checked={selected.includes(i)}
+              onChange={(e) => setSelected(e.target.checked ? [...selected, i].sort() : selected.filter((x) => x !== i))} /> {t.title}
           </label>
         ))}
         <label style={{ fontSize: 13 }}>
-          <input type="radio" checked={mode === "mix"} onChange={() => setMode("mix")} />
-          選択トラックを2mixに統合
+          <input type="radio" checked={mode === "mix"} onChange={() => setMode("mix")} /> {STRINGS.inputConfig.mixMode}
         </label>
         <label style={{ fontSize: 13 }}>
-          <input type="radio" checked={mode === "multitrack"} onChange={() => setMode("multitrack")} />
-          マルチトラックとして読み込む(トラックごとに解析)
+          <input type="radio" checked={mode === "multitrack"} onChange={() => setMode("multitrack")} /> {STRINGS.inputConfig.multitrackMode}
         </label>
-        {mode === "mix" && (
+        {mode === "mix" && stereoOk && (
           <label style={{ fontSize: 13 }}>
-            <input
-              type="checkbox"
-              checked={split === "stereo-split"}
-              onChange={(e) => setSplit(e.target.checked ? "stereo-split" : "mono")}
-            /> L/R を個別ソースとして解析
+            <input type="checkbox" checked={split === "stereo-split"}
+              onChange={(e) => setSplit(e.target.checked ? "stereo-split" : "mono")} /> {STRINGS.inputConfig.stereoSplit}
           </label>
         )}
-        <button
-          disabled={selected.length === 0}
-          onClick={() => props.onStart({ mode, trackIndexes: selected, channelSplit: split })}
-        >解析開始</button>
+        <button disabled={selected.length === 0}
+          onClick={() => props.onStart({ mode, trackIndexes: selected, channelSplit: split })}>{STRINGS.inputConfig.start}</button>
       </div>
     </div>
   );

@@ -76,4 +76,48 @@ describe("playback 拡張", () => {
     expect(onEnded).toHaveBeenCalledTimes(1);
     pb.dispose();
   });
+
+  // T12必須指示(台帳・レビューImportant #4b): onEnded は「まだ現役のノード」からの発火のみ
+  // 自然終了とみなす(startNode内の `if (srcNode !== node) return;` guard)。実ブラウザでは
+  // stop()済みノードのonendedが遅れて発火することがあるため、pause/seek/disposeそれぞれの後で
+  // 「差し替え前の古いノード」のonendedを手動発火させ、guardが握りつぶすことを確認する
+  // (フェイクのstop()は自発的にonendedを起こさないため、実ブラウザの遅延発火を模擬する)。
+  it("[回帰] pause 後に古いノードの遅延 onended が発火しても onEnded は呼ばれない(guard)", async () => {
+    const onEnded = vi.fn();
+    const f = fakeCtx();
+    const pb = createPlayback(() => f.raw as unknown as AudioContext, { onEnded });
+    await pb.load(new ArrayBuffer(8));
+    pb.play();
+    const staleNode = f.buffers[f.buffers.length - 1]!;
+    pb.pause();
+    staleNode.onended?.(); // 実ブラウザでのstop()後の遅延発火を模擬
+    expect(onEnded).not.toHaveBeenCalled();
+    pb.dispose();
+  });
+
+  it("[回帰] seek 後に古いノードの遅延 onended が発火しても onEnded は呼ばれない(guard)", async () => {
+    const onEnded = vi.fn();
+    const f = fakeCtx();
+    const pb = createPlayback(() => f.raw as unknown as AudioContext, { onEnded });
+    await pb.load(new ArrayBuffer(8));
+    pb.play();
+    const staleNode = f.buffers[f.buffers.length - 1]!;
+    pb.seek(3); // 再生中のseekは内部で新ノードへ差し替わる
+    expect(f.buffers.length).toBeGreaterThan(1); // 差し替え前提の確認(新ノードが作られている)
+    staleNode.onended?.(); // 差し替え前の古いノードの遅延発火を模擬
+    expect(onEnded).not.toHaveBeenCalled();
+    pb.dispose();
+  });
+
+  it("[回帰] dispose 後に古いノードの遅延 onended が発火しても onEnded は呼ばれない(guard)", async () => {
+    const onEnded = vi.fn();
+    const f = fakeCtx();
+    const pb = createPlayback(() => f.raw as unknown as AudioContext, { onEnded });
+    await pb.load(new ArrayBuffer(8));
+    pb.play();
+    const staleNode = f.buffers[f.buffers.length - 1]!;
+    pb.dispose();
+    staleNode.onended?.(); // dispose後の遅延発火を模擬
+    expect(onEnded).not.toHaveBeenCalled();
+  });
 });

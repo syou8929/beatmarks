@@ -35,7 +35,7 @@ describe("dirty フラグ", () => {
   });
   it("MARKER_SELECTED は dirty を変えない", () => {
     let s = reducer(initialState(), { type: "PROJECT_READY", project: proj(), input: INPUT });
-    s = reducer(s, { type: "MARKER_SELECTED", markerId: "beat-0" });
+    s = reducer(s, { type: "MARKER_SELECTED", selection: { sourceId: "mix", markerId: "beat-0" } });
     expect(dirty(s)).toBe(false);
   });
 

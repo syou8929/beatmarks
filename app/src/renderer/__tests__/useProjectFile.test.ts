@@ -7,8 +7,9 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { AnalyzedProject, InputConfig, MenuEvent } from "../../shared/ipc.js";
+import type { AnalyzedProject, InputConfig, MenuEvent, OpenProjectOutcome } from "../../shared/ipc.js";
 import type { AnalysisResult } from "../../shared/types.js";
+import { defaultEditState } from "../../shared/validate.js";
 import { useProjectFile } from "../hooks/useProjectFile.js";
 import { initialState, reducer, type Action, type AppState } from "../state/store.js";
 
@@ -44,9 +45,93 @@ function installIpc(saveProject: (state: unknown, toPath: string | null) => Prom
   return menuCbs;
 }
 
+/** window.beatmarks の open系モック。openProject/openProjectByPath と onMenu 購読の
+ *  検証に必要な分のみ実装する。 */
+function installOpenIpc(outcome: OpenProjectOutcome | null): { menuCbs: MenuCb[]; openProject: ReturnType<typeof vi.fn> } {
+  const menuCbs: MenuCb[] = [];
+  const openProject = vi.fn(async () => outcome);
+  const api = {
+    openProject,
+    openProjectByPath: vi.fn(async () => outcome),
+    onMenu: (cb: MenuCb) => { menuCbs.push(cb); return () => {}; },
+  };
+  (window as unknown as { beatmarks: unknown }).beatmarks = api;
+  return { menuCbs, openProject };
+}
+
+function reopenedOutcome(): OpenProjectOutcome {
+  return {
+    ok: true, path: "/other.bmk", playbackWavPath: "/tmp/other.wav", hashMismatch: false,
+    state: {
+      version: 1, mediaPath: "/m/other.mp4", mediaHash: "b".repeat(64), baseName: "other", durationSec: 5,
+      input: INPUT,
+      sources: [{ source: { id: "mix", kind: "mix", label: "2mix" }, analysis: analysis(), edits: defaultEditState() }],
+      activeSourceId: "mix", ui: { fps: { num: 30, den: 1 }, rounding: "nearest" },
+    },
+  };
+}
+
 afterEach(() => {
   delete (window as unknown as { beatmarks?: unknown }).beatmarks;
   vi.restoreAllMocks();
+});
+
+// T12必須指示(台帳): dirty(未保存の変更あり)状態で File→開く/最近使ったファイル から別
+// プロジェクトを開こうとすると、以前は確認なしに現在の編集を破棄していた。
+describe("useProjectFile: dirty時のOpen確認ガード(T12追加)", () => {
+  function dirtyEditorState(): AppState {
+    return reducer(editorState(), { type: "EDIT_APPLIED", edit: { gridOffsetDeltaSec: 0.01 } });
+  }
+
+  it("dirty時にopenして確認ダイアログをキャンセルすると PROJECT_LOADED はdispatchされない", async () => {
+    const { menuCbs, openProject } = installOpenIpc(reopenedOutcome());
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const dispatch = vi.fn<(a: Action) => void>();
+
+    renderHook(() => useProjectFile(dirtyEditorState(), dispatch));
+    menuCbs.forEach((cb) => cb({ action: "open" }));
+
+    await waitFor(() => expect(openProject).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: "PROJECT_LOADED" }));
+  });
+
+  it("dirty時にopenして確認ダイアログを承諾すると PROJECT_LOADED がdispatchされる", async () => {
+    const { menuCbs } = installOpenIpc(reopenedOutcome());
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const dispatch = vi.fn<(a: Action) => void>();
+
+    renderHook(() => useProjectFile(dirtyEditorState(), dispatch));
+    menuCbs.forEach((cb) => cb({ action: "open" }));
+
+    await waitFor(() => expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "PROJECT_LOADED" })));
+  });
+
+  it("dirtyでない(clean)ときは確認なしで PROJECT_LOADED がdispatchされる", async () => {
+    const { menuCbs } = installOpenIpc(reopenedOutcome());
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const dispatch = vi.fn<(a: Action) => void>();
+
+    renderHook(() => useProjectFile(editorState(), dispatch)); // isDirty:false
+    menuCbs.forEach((cb) => cb({ action: "open" }));
+
+    await waitFor(() => expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "PROJECT_LOADED" })));
+    expect(confirmSpy).not.toHaveBeenCalled();
+  });
+
+  it("最近使ったファイル(openRecent)も同じdirty確認ガードを通る", async () => {
+    const { menuCbs } = installOpenIpc(reopenedOutcome());
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const dispatch = vi.fn<(a: Action) => void>();
+
+    renderHook(() => useProjectFile(dirtyEditorState(), dispatch));
+    menuCbs.forEach((cb) => cb({ action: "openRecent", path: "/other.bmk" }));
+
+    await waitFor(() => expect(confirmSpy).toHaveBeenCalled());
+    expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: "PROJECT_LOADED" }));
+  });
 });
 
 describe("useProjectFile: 保存キャンセル/エラーの静穏化(レビュー再現)", () => {

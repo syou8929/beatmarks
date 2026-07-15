@@ -40,4 +40,20 @@ describe("ExportPanel", () => {
     fireEvent.click(screen.getByLabelText("書き出し"));
     expect(onExport.mock.calls[0]![0].sourceIds).toEqual(["mix", "ch-L"]);
   });
+
+  // T12必須指示(台帳・レビューImportant #1「書き出しの静黙全滅チェーンを閉じる」): onExport が
+  // reject しても(exportFlowの防御が効かない予期しない経路も含め)、無音で終わらずエラーが
+  // 結果UIに表示されることを確認する。
+  it("[回帰] onExport が reject してもエラーが結果表示に出る(静黙失敗しない)", async () => {
+    const dispatch = vi.fn();
+    const onExport = vi.fn().mockRejectedValue(new Error("IPC切断"));
+    render(<ExportPanel fps={{ num: 30, den: 1 }} rounding="nearest"
+      sources={[{ id: "mix", label: "2mix" }]} activeSourceId="mix"
+      dispatch={dispatch} onExport={onExport} />);
+    fireEvent.click(screen.getByLabelText("target json"));
+    fireEvent.click(screen.getByLabelText("書き出し"));
+    expect(await screen.findByText(/IPC切断/)).toBeTruthy();
+    // busyが解除され、リトライ相当の再実行も可能な状態に戻っていること
+    expect((screen.getByLabelText("書き出し") as HTMLButtonElement).disabled).toBe(false);
+  });
 });

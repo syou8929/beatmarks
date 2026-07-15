@@ -66,8 +66,17 @@ export function ExportPanel(props: ExportPanelProps): React.JSX.Element {
   async function doExport(): Promise<void> {
     if (targets.size === 0) return;
     setBusy(true);
-    try { setResult(await onExport(currentOpts())); }
-    finally { setBusy(false); }
+    try {
+      setResult(await onExport(currentOpts()));
+    } catch (e) {
+      // T12必須指示(台帳・レビューImportant #1): onExport(=exportFlow)自体が予期せず reject
+      // しても(exportFlow側で大半は吸収済みだが、chooseExportDir等の他要因も含め防御的に)
+      // 画面には何も出ないまま終わらせず、既存の failed[] 描画経路(下のresult.failedブロック・
+      // リトライボタン)にそのまま載せる。
+      setResult({ written: [], failed: [{ path: "-", message: e instanceof Error ? e.message : String(e) }] });
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

@@ -48,33 +48,45 @@ describe("error フェーズ", () => {
   });
 });
 
-describe("マーカー選択(undo対象外)", () => {
-  it("PROJECT_READY 直後は selectedMarkerId が null", () => {
+describe("マーカー選択(undo対象外・ソース限定)", () => {
+  it("PROJECT_READY 直後は selectedMarker が null", () => {
     const s = editor();
     if (s.phase !== "editor") throw new Error();
-    expect(s.selectedMarkerId).toBeNull();
+    expect(s.selectedMarker).toBeNull();
   });
 
-  it("MARKER_SELECTED で selectedMarkerId を設定/クリアできる", () => {
-    let s = reducer(editor(), { type: "MARKER_SELECTED", markerId: "bar-2" });
+  it("MARKER_SELECTED で selectedMarker(sourceId+markerId)を設定/クリアできる", () => {
+    let s = reducer(editor(), { type: "MARKER_SELECTED", selection: { sourceId: "mix", markerId: "bar-2" } });
     if (s.phase !== "editor") throw new Error();
-    expect(s.selectedMarkerId).toBe("bar-2");
-    s = reducer(s, { type: "MARKER_SELECTED", markerId: null });
+    expect(s.selectedMarker).toEqual({ sourceId: "mix", markerId: "bar-2" });
+    s = reducer(s, { type: "MARKER_SELECTED", selection: null });
     if (s.phase !== "editor") throw new Error();
-    expect(s.selectedMarkerId).toBeNull();
+    expect(s.selectedMarker).toBeNull();
   });
 
   it("MARKER_SELECTED は undo スタックを積まない", () => {
-    const s = reducer(editor(), { type: "MARKER_SELECTED", markerId: "bar-2" });
+    const s = reducer(editor(), { type: "MARKER_SELECTED", selection: { sourceId: "mix", markerId: "bar-2" } });
     if (s.phase !== "editor") throw new Error();
     expect(s.undo).toHaveLength(0);
   });
 
   it("SOURCE_SWITCHED で選択がクリアされる", () => {
-    let s = reducer(editor(), { type: "MARKER_SELECTED", markerId: "bar-2" });
+    let s = reducer(editor(), { type: "MARKER_SELECTED", selection: { sourceId: "mix", markerId: "bar-2" } });
     s = reducer(s, { type: "SOURCE_SWITCHED", sourceId: "ch-L" });
     if (s.phase !== "editor") throw new Error();
     expect(s.project.activeSourceId).toBe("ch-L");
-    expect(s.selectedMarkerId).toBeNull();
+    expect(s.selectedMarker).toBeNull();
+  });
+
+  // T12必須指示(台帳): selectedMarkerId はソース内でのみ一意な id 単体ではなく、
+  // sourceId を伴う複合キーで持つ(幻ハイライト防止)。異なるソースで同じ markerId を
+  // 選んでも別物として区別できることをストアレベルで固定化する。
+  it("同じ markerId でも sourceId が異なれば別の選択として区別される", () => {
+    let s = reducer(editor(), { type: "MARKER_SELECTED", selection: { sourceId: "mix", markerId: "bar-2" } });
+    if (s.phase !== "editor") throw new Error();
+    expect(s.selectedMarker).toEqual({ sourceId: "mix", markerId: "bar-2" });
+    s = reducer(s, { type: "MARKER_SELECTED", selection: { sourceId: "ch-L", markerId: "bar-2" } });
+    if (s.phase !== "editor") throw new Error();
+    expect(s.selectedMarker).toEqual({ sourceId: "ch-L", markerId: "bar-2" });
   });
 });

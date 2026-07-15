@@ -36,6 +36,14 @@ export function useProjectFile(state: AppState, dispatch: (a: Action) => void): 
     function load(outcome: OpenProjectOutcome | null): void {
       if (!outcome) return;
       if (!outcome.ok) { alert(outcome.message); return; }
+      // T12必須指示(台帳): dirty(未保存の変更あり)状態で File→開く/最近使ったファイル から
+      // 別プロジェクトを開こうとすると、現在の編集を確認なしに破棄していた。ここで確認ガードを
+      // かける(openProject()自体はもう完了しダイアログ選択/ファイル読み込み後なので、ここで
+      // キャンセルしても再度開き直せば良いだけで、状態的な副作用は無い)。
+      if (state.phase === "editor" && state.isDirty &&
+          !window.confirm(`${STRINGS.menu.discardDirtyTitle}\n${STRINGS.menu.discardDirty}`)) {
+        return;
+      }
       if (outcome.hashMismatch &&
           !window.confirm(`${STRINGS.menu.hashMismatchTitle}\n${STRINGS.menu.hashMismatch}`)) {
         return;

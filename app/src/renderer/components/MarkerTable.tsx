@@ -9,7 +9,7 @@ import {
   activeRows, ALL_MARKER_TYPES, crossSourceRows, deletedRows, filterByType,
   isMutable, isRenamable, rowLabel, sectionIndexFromMarkerId, typeLabel, type TableRow,
 } from "../editor/markerTableModel.js";
-import type { Action, SourceState } from "../state/store.js";
+import type { Action, MarkerSelection, SourceState } from "../state/store.js";
 import { STRINGS } from "../strings.js";
 
 const S = STRINGS.markerTable;
@@ -24,14 +24,14 @@ export interface MarkerTableProps {
   sources: SourceState[];
   fps: Fps;
   rounding: RoundingMode;
-  selectedMarkerId: string | null;
+  selectedMarker: MarkerSelection | null;
   dispatch: (a: Action) => void;
   onSeek: (sec: number) => void;
   onAddMarker: () => void;
 }
 
 export function MarkerTable(props: MarkerTableProps): React.JSX.Element {
-  const { activeSource, sources, fps, rounding, selectedMarkerId, dispatch, onSeek, onAddMarker } = props;
+  const { activeSource, sources, fps, rounding, selectedMarker, dispatch, onSeek, onAddMarker } = props;
   const [enabled, setEnabled] = useState<Set<MarkerType>>(new Set(DEFAULT_TYPES));
   const [cross, setCross] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
@@ -116,7 +116,10 @@ export function MarkerTable(props: MarkerTableProps): React.JSX.Element {
             {rows.map((row) => {
               const m = row.marker;
               const frame = timeToFrame(m.timeSec, fps, rounding);
-              const sel = m.id === selectedMarkerId;
+              // ソース限定の等値比較(m.id単体ではソース横断ビューで幻ハイライトする — store.ts の
+              // MarkerSelection docstring参照)。sourceId・markerId の両方が一致したときだけ選択扱い。
+              const sel = selectedMarker !== null
+                && selectedMarker.sourceId === m.sourceId && selectedMarker.markerId === m.id;
               const mutable = isMutable(row, activeSource.source.id);
               // key はソースを跨いで一意な複合キーにする: m.id は解析配列添字ベースの文字列
               // (sec-o0, bar-1, beat-0, …)でソースごとに振り直されるため、ソース横断表示
@@ -127,7 +130,10 @@ export function MarkerTable(props: MarkerTableProps): React.JSX.Element {
               // 比較か isMutable ガード経由で安全なため、ここは React key の一意性の話に限る。
               return (
                 <tr key={`${m.sourceId}:${m.id}`} style={sel ? styles.trSel : undefined}
-                  onClick={() => { dispatch({ type: "MARKER_SELECTED", markerId: m.id }); onSeek(m.timeSec); }}>
+                  onClick={() => {
+                    dispatch({ type: "MARKER_SELECTED", selection: { sourceId: m.sourceId, markerId: m.id } });
+                    onSeek(m.timeSec);
+                  }}>
                   <td style={styles.td}>
                     <span style={styles.typecell}>
                       <span style={{ ...styles.tdot, background: m.color }} />{typeLabel(m)}

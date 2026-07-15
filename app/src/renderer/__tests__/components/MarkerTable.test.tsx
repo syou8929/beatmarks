@@ -22,15 +22,18 @@ function setup(over = {}) {
   const dispatch = vi.fn(); const onSeek = vi.fn(); const onAddMarker = vi.fn();
   const s = src(over);
   render(<MarkerTable activeSource={s} sources={[s]} fps={{ num: 30, den: 1 }} rounding="nearest"
-    selectedMarkerId={null} dispatch={dispatch} onSeek={onSeek} onAddMarker={onAddMarker} />);
+    selectedMarker={null} dispatch={dispatch} onSeek={onSeek} onAddMarker={onAddMarker} />);
   return { dispatch, onSeek };
 }
 
 describe("MarkerTable", () => {
-  it("行クリックで MARKER_SELECTED + onSeek", () => {
+  it("行クリックで MARKER_SELECTED(ソース限定の複合キー) + onSeek", () => {
     const { dispatch, onSeek } = setup();
     fireEvent.click(screen.getByText("フラッシュ"));
-    expect(dispatch).toHaveBeenCalledWith({ type: "MARKER_SELECTED", markerId: "custom-1" });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "MARKER_SELECTED",
+      selection: { sourceId: "mix", markerId: "custom-1" },
+    });
     expect(onSeek).toHaveBeenCalledWith(3);
   });
   it("削除ボタンで MARKER_DELETED", () => {
@@ -65,7 +68,10 @@ describe("MarkerTable", () => {
     fireEvent.click(screen.getByLabelText("リネーム custom-1"));
     const input = screen.getByLabelText("ラベル編集 custom-1");
     fireEvent.click(input);
-    expect(dispatch).not.toHaveBeenCalledWith({ type: "MARKER_SELECTED", markerId: "custom-1" });
+    expect(dispatch).not.toHaveBeenCalledWith({
+      type: "MARKER_SELECTED",
+      selection: { sourceId: "mix", markerId: "custom-1" },
+    });
     expect(onSeek).not.toHaveBeenCalled();
   });
 
@@ -85,7 +91,7 @@ describe("MarkerTable", () => {
     const onSeek = vi.fn();
     render(
       <MarkerTable activeSource={mixSrc} sources={[mixSrc, voSrc]} fps={{ num: 30, den: 1 }} rounding="nearest"
-        selectedMarkerId={null} dispatch={dispatch} onSeek={onSeek} onAddMarker={vi.fn()} />,
+        selectedMarker={null} dispatch={dispatch} onSeek={onSeek} onAddMarker={vi.fn()} />,
     );
     fireEvent.click(screen.getByText(STRINGS.markerTable.crossSource));
 
@@ -97,7 +103,30 @@ describe("MarkerTable", () => {
 
     // ただし選択+シークは他ソースの行でも動く(閲覧・移動は安全なので塞がない)
     fireEvent.click(screen.getByText("別ソースの印"));
-    expect(dispatch).toHaveBeenCalledWith({ type: "MARKER_SELECTED", markerId: "custom-9" });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "MARKER_SELECTED",
+      selection: { sourceId: "vo", markerId: "custom-9" },
+    });
     expect(onSeek).toHaveBeenCalledWith(5);
+  });
+
+  // T12必須指示(台帳・レビューImportant): selectedMarkerId がソース非限定だと、ソース横断表示で
+  // 非アクティブ行を選択したとき、アクティブソース側の同ID行まで幻ハイライトしてしまっていた。
+  it("[回帰] 幻ハイライト: 同じ marker.id を持つ別ソースの行は選択しても互いにハイライトしない", () => {
+    const mixMarker: Marker = { id: "dup-1", sourceId: "mix", timeSec: 1, type: "custom", label: "Mix版", color: "#ffd166", source: "user" };
+    const voMarker: Marker = { id: "dup-1", sourceId: "vo", timeSec: 2, type: "custom", label: "Vo版", color: "#ffd166", source: "user" };
+    const mixSrc: SourceState = { source: { id: "mix", kind: "mix", label: "2mix" }, analysis, warnings: [], edits: { ...defaultEditState(), customMarkers: [mixMarker] } };
+    const voSrc: SourceState = { source: { id: "vo", kind: "track", label: "Vo" }, analysis, warnings: [], edits: { ...defaultEditState(), customMarkers: [voMarker] } };
+    const dispatch = vi.fn();
+    render(
+      <MarkerTable activeSource={mixSrc} sources={[mixSrc, voSrc]} fps={{ num: 30, den: 1 }} rounding="nearest"
+        selectedMarker={{ sourceId: "mix", markerId: "dup-1" }} dispatch={dispatch} onSeek={vi.fn()} onAddMarker={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByText(STRINGS.markerTable.crossSource));
+
+    const mixRow = screen.getByText("Mix版").closest("tr")!;
+    const voRow = screen.getByText("Vo版").closest("tr")!;
+    expect(mixRow.style.background).toBeTruthy(); // 選択中(sourceId一致)
+    expect(voRow.style.background).toBeFalsy(); // 同じ id "dup-1" だが別ソース → ハイライトしない
   });
 });

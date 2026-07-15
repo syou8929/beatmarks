@@ -53,22 +53,23 @@ describe("CUSTOM_MARKER_UPDATED / MARKER_RESTORED", () => {
 
 // Task 1 レビューの追加指示(計画doc 2026-07-13-editor-export.md 204行目): selectedMarkerId が
 // UNDO/REDO を素通りすることのピン留めテスト。store.ts の UNDO/REDO は `...state` 展開で
-// selectedMarkerId を触らない実装だが、それを固定化する回帰テストが無かったため追加する。
-describe("selectedMarkerId は UNDO/REDO を素通りする(ピン留め)", () => {
-  it("選択中に別の編集を UNDO/REDO しても selectedMarkerId は変化しない", () => {
-    let s = reducer(editor(), { type: "MARKER_SELECTED", markerId: "custom-1" });
+// selectedMarker を触らない実装だが、それを固定化する回帰テストが無かったため追加する。
+// (T12でselectedMarkerIdはソース限定の複合キー selectedMarker:{sourceId,markerId} に改名。)
+describe("selectedMarker は UNDO/REDO を素通りする(ピン留め)", () => {
+  it("選択中に別の編集を UNDO/REDO しても selectedMarker は変化しない", () => {
+    let s = reducer(editor(), { type: "MARKER_SELECTED", selection: { sourceId: "mix", markerId: "custom-1" } });
     s = reducer(s, { type: "CUSTOM_MARKER_UPDATED", id: "custom-1", patch: { label: "新" } });
     if (s.phase !== "editor") throw new Error("not editor");
-    expect(s.selectedMarkerId).toBe("custom-1");
+    expect(s.selectedMarker).toEqual({ sourceId: "mix", markerId: "custom-1" });
 
     s = reducer(s, { type: "UNDO" });
     if (s.phase !== "editor") throw new Error("not editor");
-    expect(s.selectedMarkerId).toBe("custom-1"); // UNDO は selectedMarkerId に触れない
+    expect(s.selectedMarker).toEqual({ sourceId: "mix", markerId: "custom-1" }); // UNDO は selectedMarker に触れない
     expect(edits(s).customMarkers[0]!.label).toBe("旧"); // 編集自体は取り消されている(対照確認)
 
     s = reducer(s, { type: "REDO" });
     if (s.phase !== "editor") throw new Error("not editor");
-    expect(s.selectedMarkerId).toBe("custom-1"); // REDO も同様
+    expect(s.selectedMarker).toEqual({ sourceId: "mix", markerId: "custom-1" }); // REDO も同様
     expect(edits(s).customMarkers[0]!.label).toBe("新");
   });
 });

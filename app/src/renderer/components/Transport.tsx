@@ -39,28 +39,32 @@ export interface TransportProps {
   playback: PlaybackEngine;
   grid: GridBeat[];
   fps: Fps;
+  /** 再生状態(EditorScreenが単一の情報源として保持し渡す — T5レビュー契約)。Transport 自身は
+   *  もうローカルに状態を持たない: Space ショートカット等 Transport の外から playback.play()/
+   *  pause() が呼ばれても(EditorScreen が rAF ループで isPlaying を追従させるため)このコンポー
+   *  ネントは常に正しいラベル/TC更新間隔で再描画される(WaveCanvas と同じ isPlaying 契約)。 */
+  isPlaying: boolean;
   onAddMarker: (sec: number) => void;
   onTapTempo: (bpm: number) => void;
 }
 
 export function Transport(props: TransportProps): React.JSX.Element {
-  const { playback, grid, fps } = props;
+  const { playback, grid, fps, isPlaying } = props;
   const { view, dispatch } = useViewStore();
-  const [playing, setPlaying] = useState(playback.isPlaying());
   const [metronome, setMetronome] = useState(false);
   const [, forceTick] = useState(0);
   const taps = useRef<number[]>([]);
 
   // 再生中は 100ms ごとに時刻表示を更新
   useEffect(() => {
-    if (!playing) return;
+    if (!isPlaying) return;
     const id = setInterval(() => forceTick((n) => n + 1), 100);
     return () => clearInterval(id);
-  }, [playing]);
+  }, [isPlaying]);
 
   function togglePlay(): void {
-    if (playback.isPlaying()) { playback.pause(); setPlaying(false); }
-    else { playback.play(); setPlaying(true); }
+    if (playback.isPlaying()) playback.pause();
+    else playback.play();
   }
 
   function toggleMetronome(): void {
@@ -103,7 +107,7 @@ export function Transport(props: TransportProps): React.JSX.Element {
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 14px", background: "#14171c", borderBottom: "1px solid #262c36" }}>
       <div style={groupStyle}>
         <button style={btn} title={S.prevTitle} onClick={() => playback.seek(0)}>{S.prev}</button>
-        <button style={primary} onClick={togglePlay}>{playing ? S.pause : S.play}</button>
+        <button style={primary} onClick={togglePlay}>{isPlaying ? S.pause : S.play}</button>
         <button style={view.loop ? toggled : btn} onClick={toggleLoop}>{S.loop}</button>
         <button style={btn} disabled={!view.loop} onClick={() => setLoopEdge("a")}>{S.setA}</button>
         <button style={btn} disabled={!view.loop} onClick={() => setLoopEdge("b")}>{S.setB}</button>
