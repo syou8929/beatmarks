@@ -57,6 +57,8 @@ export type Action =
   | { type: "SECTION_EDIT_ADDED"; op: SectionEdit }
   | { type: "CUSTOM_MARKER_ADDED"; marker: Marker }
   | { type: "MARKER_DELETED"; id: string }
+  | { type: "CUSTOM_MARKER_UPDATED"; id: string; patch: Partial<Pick<Marker, "label" | "timeSec">> }
+  | { type: "MARKER_RESTORED"; id: string }
   | { type: "SOURCE_SWITCHED"; sourceId: string }
   | { type: "FPS_CHANGED"; fps: Fps }
   | { type: "ROUNDING_CHANGED"; rounding: RoundingMode }
@@ -177,6 +179,8 @@ export function reducer(state: AppState, action: Action): AppState {
     case "SECTION_EDIT_ADDED":
     case "CUSTOM_MARKER_ADDED":
     case "MARKER_DELETED":
+    case "CUSTOM_MARKER_UPDATED":
+    case "MARKER_RESTORED":
     case "MARKER_SELECTED":
     case "SOURCE_SWITCHED":
     case "FPS_CHANGED":
@@ -217,6 +221,26 @@ export function reducer(state: AppState, action: Action): AppState {
       const cur = activeSource(state.project).edits;
       return withActiveEdits(state, {
         ...cur, deletedMarkerIds: [...cur.deletedMarkerIds, action.id],
+      });
+    }
+    // 削除してもここでは selectedMarkerId を意図的にクリアしない。削除されたマーカーの id が
+    // selectedMarkerId に残っても「ダングリングID」になるだけで無害 — 消費側(MarkerTable の
+    // 行ハイライト、HitLanes のティック強調など)はすべて `marker.id === selectedMarkerId` の
+    // 等値比較でしか selectedMarkerId を使わないため、対応するマーカーがもう存在しなければ
+    // 単にどれともマッチせず選択表示が静かに消えるだけで、例外も dispatch 不整合も起きない。
+    // MARKER_RESTORED で同じ id のマーカーが復活すれば選択表示も自然に復帰する。
+    case "CUSTOM_MARKER_UPDATED": {
+      const cur = activeSource(state.project).edits;
+      return withActiveEdits(state, {
+        ...cur,
+        customMarkers: cur.customMarkers.map((m) => (m.id === action.id ? { ...m, ...action.patch } : m)),
+      });
+    }
+    case "MARKER_RESTORED": {
+      const cur = activeSource(state.project).edits;
+      return withActiveEdits(state, {
+        ...cur,
+        deletedMarkerIds: cur.deletedMarkerIds.filter((x) => x !== action.id),
       });
     }
     case "SOURCE_SWITCHED":
