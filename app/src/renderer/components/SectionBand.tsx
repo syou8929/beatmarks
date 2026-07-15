@@ -32,10 +32,20 @@ const MIN_GAP = 0.1;
 
 export function SectionBand(props: SectionBandProps): React.JSX.Element {
   const { sections, viewport: vp } = props;
-  const [editing, setEditing] = useState<{ index: number; value: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
 
+  /** id(sec-o{i})から元添字を都度解決してから dispatch する — 位置添字ではなく元添字を使う契約は
+   *  handleDrag と同じ(表示中セクションは非表示分だけ位置がズレるため、位置添字をそのまま使うと
+   *  誤ったセクションをリネームしてしまう)。追加セクション(sec-a*)は編集開始時点で弾いているため
+   *  通常 null にはならないが、防御的に再チェックする。 */
   function commitRename(): void {
-    if (editing) { props.onRename(editing.index, editing.value); setEditing(null); }
+    if (!editing) return;
+    const label = editing.value.trim();
+    setEditing(null);
+    if (!label) return; // 空ラベルは無視(T9 MarkerTable と同じ規約)
+    const index = sectionIndexFromId(editing.id);
+    if (index === null) return;
+    props.onRename(index, label);
   }
 
   /** i番目セクションの右ハンドルドラッグ = i+1番目セクションの startSec を動かす。 */
@@ -76,17 +86,22 @@ export function SectionBand(props: SectionBandProps): React.JSX.Element {
             }}
             title={S.editHint}
           >
-            {editing?.index === i ? (
+            {editing?.id === s.id ? (
               <input
                 autoFocus
                 value={editing.value}
-                onChange={(e) => setEditing({ index: i, value: e.target.value })}
+                onChange={(e) => setEditing({ id: s.id, value: e.target.value })}
                 onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setEditing(null); }}
                 onBlur={commitRename}
                 style={{ font: "inherit", width: "100%", background: "rgba(0,0,0,.3)", color: "#fff", border: "none" }}
               />
             ) : (
-              <span onDoubleClick={() => setEditing({ index: i, value: s.label })}>
+              <span
+                onDoubleClick={() => {
+                  if (sectionIndexFromId(s.id) === null) return; // 追加セクションはリネーム不可(Phase2、handleDragと同じ制約)
+                  setEditing({ id: s.id, value: s.label });
+                }}
+              >
                 {s.label}<small style={{ fontWeight: 400, opacity: 0.8, marginLeft: 6 }}>{bars}{S.barsSuffix}</small>
               </span>
             )}

@@ -77,7 +77,7 @@ export const STRINGS = {
   },
   section: {
     barsSuffix: "小節",
-    editHint: "境界ドラッグで移動 / ダブルクリックでリネーム / 右クリックで削除",
+    editHint: "境界ドラッグで移動 / ダブルクリックでリネーム / ×ボタンで削除",
     addAtPlayhead: "＋境界(再生位置)",
     defaultLabel: "新規セクション",
     rename: "リネーム",
