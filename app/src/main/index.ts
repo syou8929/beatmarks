@@ -1,11 +1,12 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { IPC_EVENTS } from "../shared/ipc.js";
 import { createAnalyzer } from "./analyzeMedia.js";
 import { EngineClient } from "./engineClient.js";
-import { probeMedia } from "./ffmpeg.js";
+import { writeExports } from "./exportWriter.js";
+import { extractPlaybackWav, probeMedia } from "./ffmpeg.js";
 import { registerHandlers } from "./ipcRegistry.js";
 import { cleanupTempDir, engineCommand, isPathWithinRoots, tempDir } from "./paths.js";
 import { openProjectFrom, saveProjectTo, validateProjectFile } from "./projectStore.js";
@@ -78,7 +79,19 @@ app.whenReady().then(() => {
       readableRoots.add(loaded.state.playbackWavPath);
       return loaded;
     },
-    writeExports: async () => ({ dir: null, written: [], failed: [] }), // 計画③bで実装
+    writeExports: (req) =>
+      writeExports(req, {
+        readFile: async (p) => new Uint8Array(await readFile(p)),
+        writeFile: (p, d) => writeFile(p, typeof d === "string" ? d : Buffer.from(d)),
+        // 動画入力の cue 埋め込みは 44.1k stereo のフル抽出で代用(先頭音声トラック)。
+        // 元 InputConfig.trackIndexes は .bmk に無いため [0] 既定(§8の位置ズレ回避目的は満たす)。
+        extractWavForCues: (media, dest) => extractPlaybackWav(media, [0], dest),
+        tmpWavPath: () => join(tempDir(), `cues-${Date.now()}-${Math.random().toString(36).slice(2)}.wav`),
+      }),
+    chooseExportDir: async () => {
+      const r = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
+      return r.canceled ? null : (r.filePaths[0] ?? null);
+    },
   });
 
   createWindow();

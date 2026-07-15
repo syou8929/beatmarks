@@ -1,6 +1,7 @@
 /** main ↔ renderer の IPC 契約。チャンネル名と型をここに集約する。
  *  (shared 純度テストの除外対象 — 型のみで実行時依存はない) */
-import type { AnalysisResult, AudioSource, EditState, Fps } from "./types.js";
+import type { AnalysisResult, AudioSource, EditState, Fps, MarkerType, RoundingMode } from "./types.js";
+import type { TargetKey } from "./naming.js";
 
 export const IPC_CHANNELS = {
   probeMedia: "bm:probeMedia",
@@ -10,6 +11,7 @@ export const IPC_CHANNELS = {
   saveProject: "bm:saveProject",
   openProject: "bm:openProject",
   writeExports: "bm:writeExports",
+  chooseExportDir: "bm:chooseExportDir",
 } as const;
 
 export const IPC_EVENTS = {
@@ -84,17 +86,20 @@ export interface ProjectFileState {
   ui: { fps: Fps; rounding: "nearest" | "floor" };
 }
 
-export interface ExportFilePayload {
-  fileName: string;
-  kind: "text" | "bytes";
-  text?: string;
-  bytes?: ArrayBuffer;
+export interface ExportRequest {
+  targets: TargetKey[];
+  sourceIds: string[];
+  fps: Fps;
+  rounding: RoundingMode;
+  include: MarkerType[];
+  includeEnvelopes: boolean;   // 契約差分#9
+  destDir: string;
+  projectState: ProjectFileState;
 }
 
 export interface WriteExportsResult {
-  dir: string | null;        // null = ユーザーがダイアログをキャンセル
   written: string[];
-  failed: { fileName: string; message: string }[];
+  failed: { path: string; message: string }[];
 }
 
 export interface IpcApi {
@@ -104,6 +109,7 @@ export interface IpcApi {
   readFileBytes(path: string): Promise<ArrayBuffer>;
   saveProject(state: ProjectFileState, toPath: string | null): Promise<string>;
   openProject(): Promise<{ path: string; state: ProjectFileState } | null>;
-  writeExports(files: ExportFilePayload[], dir: string | null): Promise<WriteExportsResult>;
+  writeExports(req: ExportRequest): Promise<WriteExportsResult>;
+  chooseExportDir(): Promise<string | null>;
   getPathForFile(file: File): string;
 }

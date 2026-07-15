@@ -24,7 +24,8 @@ function deps(over: Partial<MainDeps> = {}): MainDeps {
     readFileBytes: vi.fn(async () => new Uint8Array([1, 2, 3]).buffer),
     saveProject: vi.fn(async () => "/tmp/x.bmk"),
     openProject: vi.fn(async () => null),
-    writeExports: vi.fn(async () => ({ dir: null, written: [], failed: [] })),
+    writeExports: vi.fn(async () => ({ written: [], failed: [] })),
+    chooseExportDir: vi.fn(async () => null),
     ...over,
   };
 }
