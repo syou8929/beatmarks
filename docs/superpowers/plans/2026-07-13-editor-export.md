@@ -3608,6 +3608,9 @@ Claude-Session: https://claude.ai/code/session_01SR5fj8BNeN6TUFgoj4zhm6"
 
 ### Task 8: グリッド補正バー+数値直接入力
 
+> **完了(2026-07-13, commits 0a50a89 + 2a457b9)**: レビュー verdict Yes→フォローアップ適用。349/349。正当逸脱: ローカルSテーブル→STRINGS(grid.anchorSet/anchorClear/undo/redo 4キー追加、variable=可変テンポ統一)/NumericField activeRefブラーガード(SectionBandへもバックポート、Esc経路含む)/nudgeSec再利用。フォローアップ: NumericField閉状態のSpaceキー(T7規約)/マイナス記号U+2212統一/½×2ボタンのBPM_MIN..MAXクランプ。
+> **計画レベルのギャップ(③c/将来へ)**: spec §3.3の「アンカー以前はフリー区間」**トグル**はどのタスクも実装していない(freeBefore は常に true ハードコード — T12でも既存値保持のみ)。bpmOverride の明示クリアUIも未計画(Undoのみ)。gridModel.effectiveBpm と deriveGrid の有効判定述語が重複(将来ヘルパ抽出)。
+
 **Files:**
 - Create: `app/src/renderer/editor/gridModel.ts`(純: 実効BPM/BPMパース/オフセット整形/拍子ラベル/キー表示)
 - Create: `app/src/renderer/components/NumericField.tsx`
