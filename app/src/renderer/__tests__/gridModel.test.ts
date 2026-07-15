@@ -33,9 +33,9 @@ describe("gridModel", () => {
     expect(parseBpm("")).toBeNull(); // 空はガード(標準指示: 空はガード)
   });
 
-  it("formatOffsetMs: 符号付きms", () => {
+  it("formatOffsetMs: 符号付きms(負号はU+2212、strings.tsのgrid.minus10/minus1と統一)", () => {
     expect(formatOffsetMs(0.023)).toBe("+23ms");
-    expect(formatOffsetMs(-0.01)).toBe("-10ms");
+    expect(formatOffsetMs(-0.01)).toBe("−10ms");
     expect(formatOffsetMs(0)).toBe("+0ms");
   });
 

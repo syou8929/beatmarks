@@ -83,6 +83,18 @@ describe("GridBar", () => {
     expect(dispatch).toHaveBeenCalledWith({ type: "EDIT_APPLIED", edit: { bpmOverride: 256 } });
   });
 
+  it("×2 ボタンは係数倍の結果が300を超える場合300にクランプする(テキスト入力と同じ範囲、gridModel.clampBpm)", () => {
+    const dispatch = setup({ bpmOverride: 200 });
+    fireEvent.click(screen.getByText(STRINGS.grid.double));
+    expect(dispatch).toHaveBeenCalledWith({ type: "EDIT_APPLIED", edit: { bpmOverride: 300 } });
+  });
+
+  it("½ ボタンは係数倍の結果が30未満の場合30にクランプする(テキスト入力と同じ範囲、gridModel.clampBpm)", () => {
+    const dispatch = setup({ bpmOverride: 40 });
+    fireEvent.click(screen.getByText(STRINGS.grid.half));
+    expect(dispatch).toHaveBeenCalledWith({ type: "EDIT_APPLIED", edit: { bpmOverride: 30 } });
+  });
+
   it("KEYチップに名称・Camelot・信頼度を表示する", () => {
     setup();
     expect(screen.getByText("E minor · 9A")).toBeTruthy();

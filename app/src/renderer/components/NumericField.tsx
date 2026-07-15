@@ -86,7 +86,11 @@ export function NumericField(props: NumericFieldProps): React.JSX.Element {
     <span
       role="button" tabIndex={0} aria-label={ariaLabel} title={title}
       onClick={begin}
-      onKeyDown={(e) => { if (e.key === "Enter") begin(); }}
+      onKeyDown={(e) => {
+        // role="button" な独自要素なのでキーボード操作(Enter/Space)を明示的に配線する
+        // (ネイティブ<button>と違い既定では何も起きないため。T7 HitLanes と同じ規約)。
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); begin(); }
+      }}
       className={shake ? "bm-shake" : undefined}
       style={{ display: "inline-block", minWidth: width, cursor: "text", color: "#e8ebf0" }}
     >

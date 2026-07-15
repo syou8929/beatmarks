@@ -6,7 +6,7 @@ import React from "react";
 
 import type { AnalysisResult, EditState } from "../../shared/types.js";
 import {
-  beatsPerBarFromLabel, effectiveBpm, formatOffsetMs, keyLabel, parseBpm, timeSigLabel, TIME_SIG_OPTIONS,
+  beatsPerBarFromLabel, clampBpm, effectiveBpm, formatOffsetMs, keyLabel, parseBpm, timeSigLabel, TIME_SIG_OPTIONS,
 } from "../editor/gridModel.js";
 import { nudgeSec } from "../editor/snap.js";
 import type { Action } from "../state/store.js";
@@ -48,8 +48,8 @@ export function GridBar(props: GridBarProps): React.JSX.Element {
         <span style={{ ...styles.chip, color: bpm.fixed ? "#7ddc9a" : "#8b94a3" }}>
           {bpm.fixed ? S.fixed : S.variable}
         </span>
-        <button onClick={() => apply({ bpmOverride: (bpm.value ?? 120) / 2 })}>{S.half}</button>
-        <button onClick={() => apply({ bpmOverride: (bpm.value ?? 120) * 2 })}>{S.double}</button>
+        <button onClick={() => apply({ bpmOverride: clampBpm((bpm.value ?? 120) / 2) })}>{S.half}</button>
+        <button onClick={() => apply({ bpmOverride: clampBpm((bpm.value ?? 120) * 2) })}>{S.double}</button>
       </div>
 
       {/* オフセット */}

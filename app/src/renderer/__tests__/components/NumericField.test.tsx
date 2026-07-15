@@ -37,6 +37,14 @@ describe("NumericField", () => {
     expect(screen.getByLabelText("bpm").textContent).toBe("128.00");
   });
 
+  it("閉状態でSpaceキーを押すと編集モードに入る(role=buttonのキーボード操作、T7 HitLanesと同じ規約)", () => {
+    const onCommit = vi.fn().mockReturnValue(true);
+    render(<NumericField value="128.00" onCommit={onCommit} ariaLabel="bpm" />);
+    fireEvent.keyDown(screen.getByLabelText("bpm"), { key: " " });
+    const input = screen.getByLabelText("bpm") as HTMLInputElement;
+    expect(input.tagName).toBe("INPUT");
+  });
+
   it("クリック開始時にドラフトが現在値へ同期される(前回の入力を引きずらない)", () => {
     const onCommit = vi.fn().mockReturnValue(true);
     const { rerender } = render(<NumericField value="128.00" onCommit={onCommit} ariaLabel="bpm" />);

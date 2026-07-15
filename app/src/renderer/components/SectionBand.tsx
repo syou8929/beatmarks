@@ -1,6 +1,6 @@
 /** セクション帯(スペック §7 ④): 色帯・小節数・境界ドラッグ・ダブルクリックリネーム・削除・境界追加。
  *  モックの sectionlane 相当。実 store 接続は EditorScreen(T12)がコールバックを配線する。 */
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 
 import { resolveBoundaryDrag, sectionIndexFromId } from "../editor/sectionGeom.js";
 import { secToPx, type Viewport } from "../editor/waveGeom.js";
@@ -33,12 +33,19 @@ const MIN_GAP = 0.1;
 export function SectionBand(props: SectionBandProps): React.JSX.Element {
   const { sections, viewport: vp } = props;
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
+  // NumericField の activeRef と同じガード(同コンポーネントのコメント参照): 実ブラウザでは
+  // Enter確定/Esc取消による <input> のアンマウントが亡霊blurを発火させ、同一レンダーの
+  // onBlur=commitRename クロージャが古い editing を見たまま再度実行されうる。ref は全レンダー
+  // 共有の可変セルなので、古いクロージャから読んでも「このセッションは解決済みか」を判定できる。
+  const activeRef = useRef(false);
 
   /** id(sec-o{i})から元添字を都度解決してから dispatch する — 位置添字ではなく元添字を使う契約は
    *  handleDrag と同じ(表示中セクションは非表示分だけ位置がズレるため、位置添字をそのまま使うと
    *  誤ったセクションをリネームしてしまう)。追加セクション(sec-a*)は編集開始時点で弾いているため
    *  通常 null にはならないが、防御的に再チェックする。 */
   function commitRename(): void {
+    if (!activeRef.current) return;
+    activeRef.current = false;
     if (!editing) return;
     const label = editing.value.trim();
     setEditing(null);
@@ -46,6 +53,11 @@ export function SectionBand(props: SectionBandProps): React.JSX.Element {
     const index = sectionIndexFromId(editing.id);
     if (index === null) return;
     props.onRename(index, label);
+  }
+  function cancelRename(): void {
+    if (!activeRef.current) return;
+    activeRef.current = false;
+    setEditing(null);
   }
 
   /** i番目セクションの右ハンドルドラッグ = i+1番目セクションの startSec を動かす。 */
@@ -91,7 +103,7 @@ export function SectionBand(props: SectionBandProps): React.JSX.Element {
                 autoFocus
                 value={editing.value}
                 onChange={(e) => setEditing({ id: s.id, value: e.target.value })}
-                onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setEditing(null); }}
+                onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") cancelRename(); }}
                 onBlur={commitRename}
                 style={{ font: "inherit", width: "100%", background: "rgba(0,0,0,.3)", color: "#fff", border: "none" }}
               />
@@ -99,6 +111,7 @@ export function SectionBand(props: SectionBandProps): React.JSX.Element {
               <span
                 onDoubleClick={() => {
                   if (sectionIndexFromId(s.id) === null) return; // 追加セクションはリネーム不可(Phase2、handleDragと同じ制約)
+                  activeRef.current = true;
                   setEditing({ id: s.id, value: s.label });
                 }}
               >
