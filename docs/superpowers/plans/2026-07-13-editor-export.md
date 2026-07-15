@@ -4508,6 +4508,11 @@ Claude-Session: https://claude.ai/code/session_01SR5fj8BNeN6TUFgoj4zhm6"
 
 ### Task 10: 書き出しパネル+writeExports本実装
 
+> **完了(2026-07-13, commit d6a064a)**: レビュー verdict Yes・376/376・ゴールデン21件不変。計画バグ4件修正(MIDIテストのoff-by-one — metaEventの実レイアウトは i+3/i+4 が正 / MainDeps追随漏れ ipcRegistry.test.ts / ExportPanel文言ハードコード→STRINGS 10キー追加 / テスト配置)。義務履行確認: timeSigDenominatorFor(ハードコード4なし・テスト有) / embedWavCues直呼び(再実行冪等 — 既存cueチャンク除去を確認) / dedupe(REAPER vs Nuendo は略称差で構造的に非衝突) / >127B MIDI VLQ往復テスト。audioFileName は揮発 playbackWavPath でなく mediaPath 由来(正しい判断)。
+> **T11への必須指示(レビュー Important #2)**: .bmk 改訂時に **InputConfig(mode/trackIndexes/channelSplit)を ProjectFileState に永続化**すること — 現状 wavcues の非WAV入力が track[0] ハードコードで解析時の選択と食い違いうる(再抽出の忠実性にも必須)。
+> **T12への必須指示(レビュー Important #1)**: **書き出しの静黙全滅チェーンを閉じる** — exportWriter のソース毎セットアップ(buildExportContext/deriveMarkers)が未catchで、1ソース不良が全体reject→ExportPanel/exportFlow にも catch なし→ユーザーに何も表示されない。配線時に (a) exportWriter のソース毎セットアップを try/catch して failed[] へ (b) ExportPanel/exportFlow に catch を足し結果UIにエラー表示(spec §9 リトライ思想)。
+> **③c磨き**: failed[].path の未dedupe生ファイル名 / マルチソースwavcuesのffmpeg重複抽出 / 長ラベルテストの死コード / ExportPanelテストのact()警告。
+
 > 本計画の中核価値タスク。共有エクスポータ(計画②)を main の `writeExports` が呼び、ソース×ターゲットで実ファイルを吐く。
 
 **Files:**
