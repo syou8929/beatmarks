@@ -5246,6 +5246,9 @@ Claude-Session: https://claude.ai/code/session_01SR5fj8BNeN6TUFgoj4zhm6"
 ---
 ### Task 11: .bmk改訂+メニュー統合+再オープン
 
+> **完了(2026-07-13, commits 4914681 + 224e2eb)**: レビュー verdict With fixes→解消・440/440。③aハンドオフ#2全消化(wavパス除去/mediaPath再抽出/hashMismatch助言型/欠損ok:false)。T10義務のInputConfig永続化はPROJECT_READY action経由で配線(extractWavForCuesのtrack[0]ハードコード解消、非既定インデックス回帰テスト付き)。計画バグ4件修正(recent上限/vi.fn型拡大/App.tsx漏れ/追随4ファイル)。レビュー対応: ①validateProjectFileの要素/相互参照チェック(sectionEdits[null]→deriveMarkers TypeErrorクラッシュ等の実証repro全遮断、activeSourceId相互参照、parseEngineResult要素チェック — 実エンジン出力は通過確認) ②保存ダイアログキャンセルの未処理拒否→静穏化(③cでtyped SaveOutcome化を検討)。
+> **T12へ**: dirty時のopen確認ガード(未実装のまま)。**③cへ**: recent欠損パス剪定 / menu.tsの文言ハードコード(mainからstrings参照不可のため) / SaveOutcome型化。
+
 > 台帳ハンドオフの中核: .bmk から揮発 wav パスを落として mediaPath から再抽出+mediaHash 差し替え検知、validateProjectFile 深化(parseEngineResult 再利用)。
 
 **Files:**
