@@ -36,4 +36,18 @@ describe("buildMenuTemplate", () => {
     (file.find((x) => x.label === "保存")!.click as any)();
     expect(h.onSave).toHaveBeenCalled();
   });
+  it("[回帰] 取り消し/やり直しは accelerator を持たない(renderer window keydownを唯一のキーボード" +
+    "所有者にするため・③b Task 12レビュー)。クリック(マウス操作)は引き続き機能する", () => {
+    const h = handlers();
+    const t = buildMenuTemplate(h, []);
+    const edit = t.find((x) => x.label === "編集")!.submenu as any[];
+    const undoItem = edit.find((x) => x.label === "取り消し");
+    const redoItem = edit.find((x) => x.label === "やり直し");
+    expect(undoItem.accelerator).toBeUndefined();
+    expect(redoItem.accelerator).toBeUndefined();
+    (undoItem.click as any)();
+    (redoItem.click as any)();
+    expect(h.onUndo).toHaveBeenCalled();
+    expect(h.onRedo).toHaveBeenCalled();
+  });
 });

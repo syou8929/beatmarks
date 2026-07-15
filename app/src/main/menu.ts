@@ -39,8 +39,19 @@ export function buildMenuTemplate(h: MenuHandlers, recent: string[]): MenuItemCo
   template.push({
     label: "編集",
     submenu: [
-      { label: "取り消し", accelerator: "CmdOrCtrl+Z", click: () => h.onUndo() },
-      { label: "やり直し", accelerator: "CmdOrCtrl+Shift+Z", click: () => h.onRedo() },
+      // 取り消し/やり直しは意図的に accelerator を付けない(③b Task 12 レビュー)。
+      // macOS はメニューのキー等価をシステムレベルで扱うため、テキスト入力(リネーム欄等)に
+      // フォーカス中でも accelerator があればメニュー側の click が発火してしまう
+      // (Menu#registerAccelerator:false は Win/Linux にしか効かず macOS には無力)。
+      // renderer 側の window keydown リスナー(keymap.ts の isTextInput ガード付き、
+      // EditorScreen.tsx 配線)を ⌘Z/⇧⌘Z の唯一のキーボード所有者とし、二重発火
+      // (テキスト入力中の意図しないapp-undo、または1回の⌘Zで2回undoされる等)を防ぐ。
+      // click ハンドラ(マウスでのメニュー操作)はそのまま残す — 唯一のキーボード
+      // 所有者が要るだけで、メニュー自体を無効化する話ではない。
+      // ③c の E2E(Playwright+xvfb, packaged app)で「1回の⌘Zにつき1回だけundoされる」ことを
+      // 実機検証すること(このガードは unit テストでは accelerator 不在の確認までしかできない)。
+      { label: "取り消し", click: () => h.onUndo() },
+      { label: "やり直し", click: () => h.onRedo() },
       { type: "separator" },
       { role: "cut" }, { role: "copy" }, { role: "paste" },
     ],

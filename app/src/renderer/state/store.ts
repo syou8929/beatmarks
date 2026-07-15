@@ -247,11 +247,12 @@ export function reducer(state: AppState, action: Action): AppState {
         ...cur, deletedMarkerIds: [...cur.deletedMarkerIds, action.id],
       });
     }
-    // 削除してもここでは selectedMarkerId を意図的にクリアしない。削除されたマーカーの id が
-    // selectedMarkerId に残っても「ダングリングID」になるだけで無害 — 消費側(MarkerTable の
-    // 行ハイライト、HitLanes のティック強調など)はすべて `marker.id === selectedMarkerId` の
-    // 等値比較でしか selectedMarkerId を使わないため、対応するマーカーがもう存在しなければ
-    // 単にどれともマッチせず選択表示が静かに消えるだけで、例外も dispatch 不整合も起きない。
+    // 削除してもここでは selectedMarker を意図的にクリアしない。削除されたマーカーの id が
+    // selectedMarker.markerId に残っても「ダングリングID」になるだけで無害 — 消費側(MarkerTable の
+    // 行ハイライト、HitLanes のティック強調など)はすべて sourceId・markerId の両方が selectedMarker
+    // と一致するときだけハイライトする複合キー比較(上の MarkerSelection docstring 参照)でしか
+    // selectedMarker を使わないため、対応するマーカーがもう存在しなければ単にどれともマッチせず
+    // 選択表示が静かに消えるだけで、例外も dispatch 不整合も起きない。
     // MARKER_RESTORED で同じ id のマーカーが復活すれば選択表示も自然に復帰する。
     case "CUSTOM_MARKER_UPDATED": {
       const cur = activeSource(state.project).edits;

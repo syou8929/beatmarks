@@ -63,6 +63,10 @@ function EditorBody({ state, dispatch, playback }: EditorScreenProps): React.JSX
   const [isPlaying, setIsPlaying] = useState(false);
   const [peaks, setPeaks] = useState<PeakSet | null>(null);
   const waveRef = useRef<HTMLDivElement>(null);
+  // ピーク計算 Worker への参照(下のeffect参照)。エフェクト内で生成する `w` はクロージャ
+  // ローカルなので、そのままだとcleanup(ソース切替/アンマウント)から参照できず計算途中の
+  // Workerを終了できない — ref に退避してcleanupから w.terminate() できるようにする。
+  const peaksWorkerRef = useRef<Worker | null>(null);
 
   const markers = selectMarkers(state);
   const grid = selectGrid(state);
@@ -137,14 +141,23 @@ function EditorBody({ state, dispatch, playback }: EditorScreenProps): React.JSX
         if (cancelled) return;
         const channel = buf.getChannelData(0).slice();   // ch0 をコピー(transfer 用)
         const w = new Worker(new URL("../editor/peaks.worker.ts", import.meta.url), { type: "module" });
+        peaksWorkerRef.current = w;
         w.onmessage = (e: MessageEvent<{ type: "done"; peaks: PeakSet }>) => {
           if (!cancelled) setPeaks(e.data.peaks);
-          w.terminate();
+          w.terminate(); // 自己終了(正常完了)
+          peaksWorkerRef.current = null;
         };
         w.postMessage({ type: "build", channel, sampleRate: buf.sampleRate }, [channel.buffer]);
       })
       .catch(() => { /* ピーク無しでもグリッド/マーカーは描画する */ });
-    return () => { cancelled = true; void ac.close(); };
+    return () => {
+      cancelled = true;
+      void ac.close();
+      // 計算完了(onmessage)前にソース切替/アンマウントされた場合、ref経由で
+      // 計算途中のWorkerを確実に終了する(guard: 完了済みならonmessageが既にnullにしている)。
+      peaksWorkerRef.current?.terminate();
+      peaksWorkerRef.current = null;
+    };
   }, [project.playbackWavPath]);
 
   // CUSTOM_MARKER_ADDED は UNDO/REDO ではないので guardedDispatch を介さず素の dispatch で良い
@@ -205,6 +218,7 @@ function EditorBody({ state, dispatch, playback }: EditorScreenProps): React.JSX
         const selected = sel && sel.sourceId === active.source.id
           ? markers.find((m) => m.id === sel.markerId) ?? null
           : null;
+        // キーリピートで1押下=1 undoエントリになる(上限100)。②cで必要ならコアレス検討。
         guardedDispatch(nudgeAction(cmd, selected, active.edits.gridOffsetDeltaSec, active.analysis.sections.length));
         break;
       }
