@@ -2827,6 +2827,9 @@ Claude-Session: https://claude.ai/code/session_01SR5fj8BNeN6TUFgoj4zhm6"
 
 ### Task 6: オーバービュー+セクション帯
 
+> **レビュー後の修正(2026-07-13, commits 59391ac + 963b2b4)**: 実装者の正当逸脱5件(Overview連続ドラッグ追加 — 計画コードはクリックジャンプのみで仕様§7違反 / 計画のテストフィクスチャ自体のsetTransform欠落クラッシュ修正 / hint配線 / deleteGlyph / 境界ドラッグ統合テスト)。レビューが**Critical 1件**を追加発見: リネームが map ループの位置添字を dispatch — セクション非表示/追加で位置≠元添字になると**隠れた別セクションを無症状で誤リネーム**(.bmkに永続化。実再現済み)。移動側 handleDrag と同じ sectionIndexFromId 解決に修正+sec-a* は編集モード非入場+回帰テスト(位置1≠元添字2で検証)。空ラベルガード(T9規約準拠)+editHint文言是正も同コミット。clampBoundarySec の理論エッジは帰納法+20万回ファズで**到達不能を証明**。テスト 298→318。
+> **教訓(T7以降のレビューへ)**: 位置添字 vs 元添字の取り違えはこの計画の頻出バグクラス — index を dispatch する全箇所で出所を精査すること。
+
 **Files:**
 - Create: `app/src/renderer/editor/overviewGeom.ts`(全体波形の座標変換 — 純ロジック)
 - Create: `app/src/renderer/editor/sectionGeom.ts`(セクション境界ドラッグの数学 — 純ロジック)
