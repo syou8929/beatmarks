@@ -5,7 +5,7 @@ import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { writeExports, type ExportWriterDeps } from "../exportWriter.js";
-import type { ExportRequest, ProjectFileState } from "../../shared/ipc.js";
+import type { ExportRequest, InputConfig, ProjectFileState } from "../../shared/ipc.js";
 import type { EditState } from "../../shared/types.js";
 import { defaultEditState, parseEngineResult } from "../../shared/validate.js";
 
@@ -28,14 +28,21 @@ function silentWav(durationSec: number): Uint8Array {
   return b;
 }
 
-function projectState(edits: EditState = defaultEditState(), mediaPath = "/media/track.mp4", sources = 1): ProjectFileState {
+const DEFAULT_INPUT: InputConfig = { mode: "mix", trackIndexes: [0], channelSplit: "mono" };
+
+function projectState(
+  edits: EditState = defaultEditState(),
+  mediaPath = "/media/track.mp4",
+  sources = 1,
+  input: InputConfig = DEFAULT_INPUT,
+): ProjectFileState {
   const srcArr = Array.from({ length: sources }, (_, i) => ({
     source: { id: `mix${i}`, kind: "mix" as const, label: sources > 1 ? "same" : "2mix" },
     analysis: engine.analysis, edits,
   }));
   return {
-    version: 1, mediaPath, mediaHash: "a".repeat(64), baseName: "track", playbackWavPath: "/tmp/p.wav",
-    durationSec: engine.analysis.durationSec, sources: srcArr, activeSourceId: "mix0",
+    version: 1, mediaPath, mediaHash: "a".repeat(64), baseName: "track",
+    durationSec: engine.analysis.durationSec, input, sources: srcArr, activeSourceId: "mix0",
     ui: { fps: { num: 30, den: 1 }, rounding: "nearest" },
   };
 }
@@ -82,15 +89,26 @@ describe("writeExports", () => {
     expect(out.includes(Buffer.from("cue "))).toBe(true);
   });
 
-  it("wavcues: 動画入力は extractWavForCues で抽出したWAVに埋め込む", async () => {
+  it("wavcues: 動画入力は extractWavForCues で抽出したWAVに埋め込む(input.trackIndexesを転送)", async () => {
+    const calls: number[][] = [];
     const deps: ExportWriterDeps = {
       ...realDeps,
-      extractWavForCues: async (_media, dest) => { await writeFile(dest, Buffer.from(silentWav(engine.analysis.durationSec))); },
+      extractWavForCues: async (_media, trackIndexes, dest) => {
+        calls.push(trackIndexes);
+        await writeFile(dest, Buffer.from(silentWav(engine.analysis.durationSec)));
+      },
     };
-    const r = req({ targets: ["wavcues"], projectState: projectState(defaultEditState(), "/media/clip.mp4") });
+    // trackIndexes に既定の[0]ではない値を使い、[0]固定にハードコードされていないことを検証する
+    // (台帳追加要件: main/index.ts の extractWavForCues がかつて [0] を決め打ちしていたバグの回帰防止)。
+    const customInput: InputConfig = { mode: "mix", trackIndexes: [3], channelSplit: "mono" };
+    const r = req({
+      targets: ["wavcues"],
+      projectState: projectState(defaultEditState(), "/media/clip.mp4", 1, customInput),
+    });
     const res = await writeExports(r, deps);
     expect(res.failed).toEqual([]);
     expect(readFileSync(res.written[0]!).includes(Buffer.from("cue "))).toBe(true);
+    expect(calls).toEqual([[3]]);
   });
 
   it("書込失敗は failed[] に落ち、written は空", async () => {

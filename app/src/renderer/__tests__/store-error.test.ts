@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { AnalyzedProject } from "../../shared/ipc.js";
+import type { AnalyzedProject, InputConfig } from "../../shared/ipc.js";
 import type { AnalysisResult } from "../../shared/types.js";
 import { initialState, reducer } from "../state/store.js";
 
@@ -27,7 +27,8 @@ function project(): AnalyzedProject {
   };
 }
 
-const editor = () => reducer(initialState(), { type: "PROJECT_READY", project: project() });
+const INPUT: InputConfig = { mode: "mix", trackIndexes: [0], channelSplit: "mono" };
+const editor = () => reducer(initialState(), { type: "PROJECT_READY", project: project(), input: INPUT });
 
 describe("error フェーズ", () => {
   it("ANALYZE_FAILED で error フェーズ+メッセージ保持", () => {

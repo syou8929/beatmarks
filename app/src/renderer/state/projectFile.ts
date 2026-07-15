@@ -6,7 +6,7 @@ export function toProjectFileState(p: EditorProject): ProjectFileState {
   return {
     version: 1,
     mediaPath: p.mediaPath, mediaHash: p.mediaHash, baseName: p.baseName,
-    playbackWavPath: p.playbackWavPath, durationSec: p.durationSec,
+    durationSec: p.durationSec, input: p.input,
     sources: p.sources.map((s) => ({ source: s.source, analysis: s.analysis, edits: s.edits })),
     activeSourceId: p.activeSourceId,
     ui: { fps: p.fps, rounding: p.rounding },

@@ -10,12 +10,14 @@ export const IPC_CHANNELS = {
   readFileBytes: "bm:readFileBytes",
   saveProject: "bm:saveProject",
   openProject: "bm:openProject",
+  openProjectByPath: "bm:openProjectByPath",
   writeExports: "bm:writeExports",
   chooseExportDir: "bm:chooseExportDir",
 } as const;
 
 export const IPC_EVENTS = {
   analyzeProgress: "bm:analyze:progress",
+  menu: "bm:menu",
 } as const;
 
 export interface ProbeTrack {
@@ -73,18 +75,33 @@ export interface AnalyzeProgressEvent {
   percent: number;           // ソース内 0-100
 }
 
-/** .bmk の中身(スペック §6 ProjectFile。ui は renderer 都合の最小限) */
+/** .bmk の中身(スペック §6 ProjectFile。ui は renderer 都合の最小限)。
+ *  playbackWavPath は持たない(揮発値) — 再オープン時に mediaPath から都度再抽出し、
+ *  mediaHash で差し替えを検知する(spec §6)。 */
 export interface ProjectFileState {
   version: 1;
   mediaPath: string;
   mediaHash: string;
   baseName: string;
-  playbackWavPath: string;
   durationSec: number;
+  /** 解析時の入力設定(台帳追加要件: 再オープン時の再抽出をユーザーの元選択に忠実にするため
+   *  永続化する。無いと wavcues の非WAV抽出や再生用wavの再抽出がトラック[0]に固定されてしまう)。 */
+  input: InputConfig;
   sources: { source: AudioSource; analysis: AnalysisResult; edits: EditState }[];
   activeSourceId: string;
-  ui: { fps: Fps; rounding: "nearest" | "floor" };
+  ui: { fps: Fps; rounding: RoundingMode };
 }
+
+/** .bmk 再オープンの結果(main → renderer)。playbackWavPath は再抽出した一時ファイルの
+ *  パスであり .bmk には保存しない。hashMismatch は助言的(続行判断は renderer が行う)。 */
+export type OpenProjectOutcome =
+  | { ok: true; path: string; state: ProjectFileState; playbackWavPath: string; hashMismatch: boolean }
+  | { ok: false; message: string };
+
+/** アプリメニュー(main)から renderer への通知。 */
+export type MenuEvent =
+  | { action: "open" | "save" | "saveAs" | "undo" | "redo" }
+  | { action: "openRecent"; path: string };
 
 export interface ExportRequest {
   targets: TargetKey[];
@@ -108,7 +125,8 @@ export interface IpcApi {
   cancelAnalyze(): Promise<void>;
   readFileBytes(path: string): Promise<ArrayBuffer>;
   saveProject(state: ProjectFileState, toPath: string | null): Promise<string>;
-  openProject(): Promise<{ path: string; state: ProjectFileState } | null>;
+  openProject(): Promise<OpenProjectOutcome | null>;
+  openProjectByPath(path: string): Promise<OpenProjectOutcome>;
   writeExports(req: ExportRequest): Promise<WriteExportsResult>;
   chooseExportDir(): Promise<string | null>;
   getPathForFile(file: File): string;

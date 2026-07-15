@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
 
 import type { InputConfig } from "../shared/ipc.js";
 import { createPlayback, type PlaybackEngine } from "./audio/playback.js";
+import { useProjectFile } from "./hooks/useProjectFile.js";
 import { getIpc } from "./ipc.js";
 import { selectGrid, selectMarkers } from "./state/selectors.js";
 import { initialState, reducer } from "./state/store.js";
@@ -13,6 +14,9 @@ const box: React.CSSProperties = {
 
 export function App(): React.JSX.Element {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
+  // メニュー(開く/保存/別名/最近)とダーティ・タイトルの配線。フェーズ非依存に購読するため
+  // editor 到達前でも安全(T12でツールバー等に統合予定)。
+  useProjectFile(state, dispatch);
   const playbackRef = useRef<PlaybackEngine | null>(null);
   const [metronome, setMetronome] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -72,7 +76,7 @@ export function App(): React.JSX.Element {
         dispatch({ type: "RESET" }); // キャンセルは静かにドロップ画面へ
         return;
       }
-      dispatch({ type: "PROJECT_READY", project: outcome.project });
+      dispatch({ type: "PROJECT_READY", project: outcome.project, input });
     } catch (err) {
       dispatch({ type: "ANALYZE_FAILED", message: `${STRINGS.error.analyzeFailed}: ${String(err)}` });
     }

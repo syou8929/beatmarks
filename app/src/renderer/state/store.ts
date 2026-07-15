@@ -1,6 +1,6 @@
 /** renderer の単一ストア(useReducer)。編集は activeSource の EditState への
  *  純粋パッチとして表現し、スナップショットスタックで undo/redo する。 */
-import type { AnalyzedProject, AnalyzeProgressEvent, ProjectFileState } from "../../shared/ipc.js";
+import type { AnalyzedProject, AnalyzeProgressEvent, InputConfig, ProjectFileState } from "../../shared/ipc.js";
 import type { AnalysisResult, AudioSource, EditState, Fps, Marker, RoundingMode, SectionEdit } from "../../shared/types.js";
 import { defaultEditState } from "../../shared/validate.js";
 
@@ -17,6 +17,9 @@ export interface EditorProject {
   baseName: string;
   playbackWavPath: string;
   durationSec: number;
+  /** 解析時の入力設定(台帳追加要件)。.bmk に永続化し、再オープン時の再抽出や
+   *  wavcues の非WAV抽出をユーザーの元選択に忠実にするために保持する。 */
+  input: InputConfig;
   sources: SourceState[];
   activeSourceId: string;
   fps: Fps;
@@ -44,14 +47,19 @@ export type AppState =
       undo: UndoEntry[];
       redo: UndoEntry[];
       selectedMarkerId: string | null;
+      isDirty: boolean;
+      projectPath: string | null;
     };
 
 export type Action =
   | { type: "FILE_PROBED"; filePath: string; probe: import("../../shared/ipc.js").ProbeResult }
   | { type: "ANALYZE_STARTED" }
   | { type: "ANALYZE_PROGRESS"; progress: AnalyzeProgressEvent }
-  | { type: "PROJECT_READY"; project: AnalyzedProject }
-  | { type: "PROJECT_LOADED"; state: ProjectFileState }
+  // input: analyzeMedia の AnalyzedProject 自体は入力設定を保持しないため、呼び出し側
+  // (App.tsx の startAnalyze)がローカルに持つ InputConfig をここで一緒に運ぶ(台帳追加要件)。
+  | { type: "PROJECT_READY"; project: AnalyzedProject; input: InputConfig }
+  | { type: "PROJECT_LOADED"; state: ProjectFileState; path: string; playbackWavPath: string }
+  | { type: "SAVED"; path: string }
   | { type: "RESET" }
   | { type: "EDIT_APPLIED"; edit: Partial<EditState> }
   | { type: "SECTION_EDIT_ADDED"; op: SectionEdit }
@@ -123,6 +131,7 @@ function withActiveEdits(
     project: withSourceEdits(state.project, activeId, next),
     undo: [...state.undo.slice(-(UNDO_LIMIT - 1)), { sourceId: activeId, edits: prev }],
     redo: [],
+    isDirty: true,
   };
 }
 
@@ -146,6 +155,7 @@ export function reducer(state: AppState, action: Action): AppState {
         project: {
           mediaPath: p.mediaPath, mediaHash: p.mediaHash, baseName: p.baseName,
           playbackWavPath: p.playbackWavPath, durationSec: p.durationSec,
+          input: action.input,
           sources: p.sources.map((s) => ({
             source: s.source, analysis: s.analysis, warnings: s.warnings,
             edits: defaultEditState(),
@@ -154,7 +164,7 @@ export function reducer(state: AppState, action: Action): AppState {
           fps: { num: 30, den: 1 },
           rounding: "nearest",
         },
-        undo: [], redo: [], selectedMarkerId: null,
+        undo: [], redo: [], selectedMarkerId: null, isDirty: false, projectPath: null,
       };
     }
 
@@ -164,12 +174,13 @@ export function reducer(state: AppState, action: Action): AppState {
         phase: "editor",
         project: {
           mediaPath: s.mediaPath, mediaHash: s.mediaHash, baseName: s.baseName,
-          playbackWavPath: s.playbackWavPath, durationSec: s.durationSec,
+          playbackWavPath: action.playbackWavPath, durationSec: s.durationSec,
+          input: s.input,
           sources: s.sources.map((x) => ({ ...x, warnings: [] })),
           activeSourceId: s.activeSourceId,
           fps: s.ui.fps, rounding: s.ui.rounding,
         },
-        undo: [], redo: [], selectedMarkerId: null,
+        undo: [], redo: [], selectedMarkerId: null, isDirty: false, projectPath: action.path,
       };
     }
 
@@ -187,6 +198,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "ROUNDING_CHANGED":
     case "UNDO":
     case "REDO":
+    case "SAVED":
       break;
     default: {
       // 到達しないはず: Action に新しいtypeを追加してここを更新し忘れると
@@ -252,9 +264,9 @@ export function reducer(state: AppState, action: Action): AppState {
     case "MARKER_SELECTED":
       return { ...state, selectedMarkerId: action.markerId };
     case "FPS_CHANGED":
-      return { ...state, project: { ...state.project, fps: action.fps } };
+      return { ...state, project: { ...state.project, fps: action.fps }, isDirty: true };
     case "ROUNDING_CHANGED":
-      return { ...state, project: { ...state.project, rounding: action.rounding } };
+      return { ...state, project: { ...state.project, rounding: action.rounding }, isDirty: true };
 
     case "UNDO": {
       const entry = state.undo[state.undo.length - 1];
@@ -265,6 +277,7 @@ export function reducer(state: AppState, action: Action): AppState {
         project: withSourceEdits(state.project, entry.sourceId, entry.edits),
         undo: state.undo.slice(0, -1),
         redo: [...state.redo, { sourceId: entry.sourceId, edits: cur }],
+        isDirty: true,
       };
     }
     case "REDO": {
@@ -276,8 +289,11 @@ export function reducer(state: AppState, action: Action): AppState {
         project: withSourceEdits(state.project, entry.sourceId, entry.edits),
         undo: [...state.undo, { sourceId: entry.sourceId, edits: cur }],
         redo: state.redo.slice(0, -1),
+        isDirty: true,
       };
     }
+    case "SAVED":
+      return { ...state, isDirty: false, projectPath: action.path };
     default: {
       // 到達しないはず: Action に新しいtypeを追加してここを更新し忘れると
       // ここでコンパイルエラーになる(網羅性ガード)。

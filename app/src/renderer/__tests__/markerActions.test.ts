@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { AnalyzedProject } from "../../shared/ipc.js";
+import type { AnalyzedProject, InputConfig } from "../../shared/ipc.js";
 import type { AnalysisResult, Marker } from "../../shared/types.js";
 import { initialState, reducer, type AppState } from "../state/store.js";
 
@@ -22,8 +22,9 @@ function project(): AnalyzedProject {
   };
 }
 const custom: Marker = { id: "custom-1", sourceId: "mix", timeSec: 3, type: "custom", label: "旧", color: "#ffd166", source: "user" };
+const INPUT: InputConfig = { mode: "mix", trackIndexes: [0], channelSplit: "mono" };
 function editor(): AppState {
-  let s = reducer(initialState(), { type: "PROJECT_READY", project: project() });
+  let s = reducer(initialState(), { type: "PROJECT_READY", project: project(), input: INPUT });
   return reducer(s, { type: "CUSTOM_MARKER_ADDED", marker: custom });
 }
 function edits(s: AppState) {

@@ -1,7 +1,8 @@
-import type { AnalyzeProgressEvent, IpcApi } from "../shared/ipc.js";
+import type { AnalyzeProgressEvent, IpcApi, MenuEvent } from "../shared/ipc.js";
 
 type Bridge = IpcApi & {
   onAnalyzeProgress(cb: (ev: AnalyzeProgressEvent) => void): () => void;
+  onMenu(cb: (ev: MenuEvent) => void): () => void;
 };
 
 export function getIpc(): Bridge {

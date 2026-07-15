@@ -12,8 +12,10 @@ import { timeSigDenominatorFor, type ExportContext, type TempoPoint } from "../s
 export interface ExportWriterDeps {
   readFile(path: string): Promise<Uint8Array>;
   writeFile(path: string, data: string | Uint8Array): Promise<void>;
-  /** 動画等の非WAV入力に対し、cue埋め込み用のフルWAVを destPath に抽出する。 */
-  extractWavForCues(mediaPath: string, destPath: string): Promise<void>;
+  /** 動画等の非WAV入力に対し、cue埋め込み用のフルWAVを destPath に抽出する。trackIndexes は
+   *  ProjectFileState.input.trackIndexes(台帳追加要件で永続化)をそのまま渡す — 以前は
+   *  呼び出し側([0]固定)がトラック選択を無視していた。 */
+  extractWavForCues(mediaPath: string, trackIndexes: number[], destPath: string): Promise<void>;
   tmpWavPath(): string;
 }
 
@@ -46,10 +48,10 @@ function buildExportContext(req: ExportRequest, s: SourceEntry, multiSource: boo
 }
 
 /** cue埋め込み用のWAVバイト列。.wav 入力は原品質のコピー、それ以外は ffmpeg 抽出(§8)。 */
-async function loadCueWav(mediaPath: string, deps: ExportWriterDeps): Promise<Uint8Array> {
+async function loadCueWav(mediaPath: string, trackIndexes: number[], deps: ExportWriterDeps): Promise<Uint8Array> {
   if (mediaPath.toLowerCase().endsWith(".wav")) return deps.readFile(mediaPath);
   const tmp = deps.tmpWavPath();
-  await deps.extractWavForCues(mediaPath, tmp);
+  await deps.extractWavForCues(mediaPath, trackIndexes, tmp);
   return deps.readFile(tmp);
 }
 
@@ -84,7 +86,7 @@ export async function writeExports(req: ExportRequest, deps: ExportWriterDeps): 
       let data: string | Uint8Array;
       try {
         if (target === "wavcues") {
-          if (!cueWav) cueWav = loadCueWav(req.projectState.mediaPath, deps);
+          if (!cueWav) cueWav = loadCueWav(req.projectState.mediaPath, req.projectState.input.trackIndexes, deps);
           const wavBytes = await cueWav;
           fileName = buildFileName(ctx.baseName, ctx.sourceLabel, "wavcues");
           data = embedWavCues(wavBytes, markers, ctx);

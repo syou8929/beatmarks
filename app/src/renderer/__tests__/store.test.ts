@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { AnalyzedProject } from "../../shared/ipc.js";
+import type { AnalyzedProject, InputConfig } from "../../shared/ipc.js";
 import type { AnalysisResult } from "../../shared/types.js";
 import { initialState, reducer, type AppState } from "../state/store.js";
 import { selectGrid, selectMarkers } from "../state/selectors.js";
@@ -32,8 +32,10 @@ function project(): AnalyzedProject {
   };
 }
 
+const INPUT: InputConfig = { mode: "mix", trackIndexes: [0], channelSplit: "mono" };
+
 function editorState(): AppState {
-  return reducer(initialState(), { type: "PROJECT_READY", project: project() });
+  return reducer(initialState(), { type: "PROJECT_READY", project: project(), input: INPUT });
 }
 
 function activeEdits(s: AppState) {

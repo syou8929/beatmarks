@@ -1,7 +1,7 @@
 /** ipcMain.handle の束ね役。実装は deps 注入(テスト・段階実装のため)。 */
 import type { IpcMain } from "electron";
 
-import { IPC_CHANNELS, type AnalyzedProject, type AnalyzeOutcome, type AnalyzeRequest, type ExportRequest, type ProbeResult, type ProjectFileState, type WriteExportsResult } from "../shared/ipc.js";
+import { IPC_CHANNELS, type AnalyzedProject, type AnalyzeOutcome, type AnalyzeRequest, type ExportRequest, type OpenProjectOutcome, type ProbeResult, type ProjectFileState, type WriteExportsResult } from "../shared/ipc.js";
 
 export interface MainDeps {
   probeMedia(filePath: string): Promise<ProbeResult>;
@@ -9,7 +9,8 @@ export interface MainDeps {
   cancelAnalyze(): Promise<void>;
   readFileBytes(path: string): Promise<ArrayBuffer>;
   saveProject(state: ProjectFileState, toPath: string | null): Promise<string>;
-  openProject(): Promise<{ path: string; state: ProjectFileState } | null>;
+  openProject(): Promise<OpenProjectOutcome | null>;
+  openProjectByPath(path: string): Promise<OpenProjectOutcome>;
   writeExports(req: ExportRequest): Promise<WriteExportsResult>;
   chooseExportDir(): Promise<string | null>;
 }
@@ -37,6 +38,7 @@ export function registerHandlers(ipcMain: IpcMain, deps: MainDeps): void {
   ipcMain.handle(IPC_CHANNELS.saveProject, (_e, state: ProjectFileState, toPath: string | null) =>
     deps.saveProject(state, toPath));
   ipcMain.handle(IPC_CHANNELS.openProject, () => deps.openProject());
+  ipcMain.handle(IPC_CHANNELS.openProjectByPath, (_e, path: string) => deps.openProjectByPath(path));
   ipcMain.handle(IPC_CHANNELS.writeExports, (_e, req: ExportRequest) => deps.writeExports(req));
   ipcMain.handle(IPC_CHANNELS.chooseExportDir, () => deps.chooseExportDir());
 }

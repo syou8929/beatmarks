@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { IPC_CHANNELS, type AnalyzedProject, type AnalyzeOutcome } from "../../shared/ipc.js";
+import { IPC_CHANNELS, type AnalyzedProject, type AnalyzeOutcome, type OpenProjectOutcome } from "../../shared/ipc.js";
 import { registerHandlers, type MainDeps } from "../ipcRegistry.js";
 
 function fakeIpcMain() {
@@ -25,6 +25,9 @@ function deps(over: Partial<MainDeps> = {}): MainDeps {
     readFileBytes: vi.fn(async () => new Uint8Array([1]).buffer),
     saveProject: vi.fn(async () => "/tmp/x.bmk"),
     openProject: vi.fn(async () => null),
+    // 戻り値オブジェクトリテラルは vi.fn の generic 推論に対して文脈型付けされず ok: false が
+    // boolean に広がってしまう(tsc実測で確認済み)ため、明示的に戻り値型を注記する。
+    openProjectByPath: vi.fn(async (): Promise<OpenProjectOutcome> => ({ ok: false, message: "n/a" })),   // ← 追加(必須プロパティ)
     writeExports: vi.fn(async () => ({ written: [], failed: [] })),
     chooseExportDir: vi.fn(async () => null),
     ...over,
