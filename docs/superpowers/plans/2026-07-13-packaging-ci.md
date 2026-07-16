@@ -5,7 +5,7 @@
 
 **Goal:** BeatMarks を Mac(arm64優先)/Windows(x64) の配布可能なアプリに固め、GitHub Actions で両OSビルド+テスト+E2Eスモークを自動化する。
 
-**前提状態:** feat/app-core = fdff1a9(③a+③b、app vitest 482 / engine pytest 59 全緑)。台帳 `.superpowers/sdd/progress.md` の「③c 権威的持ち越しリスト」が本計画の入力。
+**前提状態:** feat/app-core(③a+③b、app vitest 482 / engine pytest 59 全緑)。本計画の入力となる持ち越し課題は本書末尾の「権威的持ち越しリスト」(③b最終ブランチレビューで統合済み)。
 
 ---
 
@@ -59,3 +59,26 @@
 ## この計画がやらないこと(Phase 2)
 
 署名・公証・自動アップデート / Mac App Store / C4D・Houdini・Maya・3dsMax・Unity・UE エクスポータ / Ableton 実験 / バッチ処理 / ニューラルモード / 長尺分割解析 / 略称カスタマイズ
+
+## 権威的持ち越しリスト(③b最終ブランチレビュー統合版 — 本計画の入力)
+
+**A. パッケージング/ライセンス**: electron-builder / エンジンPyInstaller+ffmpeg同梱 / THIRD_PARTY_LICENSES.md / GPL非含有最終確認 / **LGPLビルドのffmpeg選定**(採用ビルドで mp4/mov のストリーム title タグ回収可否を再確認 — ffprobe 6.1.1 では不可だった)
+
+**B. CI**: GitHub Actions mac/win マトリクス+成果物アップロード+リリース
+
+**C. E2E(Playwright+xvfb、パッケージ構成)**: 1⌘Z=1undo(メニュー二重発火の回帰) / ホイール・ピンチのカーソル中心ズーム(ページスクロールしない) / 再生(Space・メトロノーム・ループ) / D&D→解析→編集→書き出し→保存→再オープン全流(hashMismatch 分岐含む) / Worker ピーク計算+Canvas 60fps / nudge キーリピートの undo 段数挙動 / ソースタブ切替が波形・音声を変えない現仕様の意図確認(変えるべきなら issue 化)
+
+**D. UI磨き/技術負債**(各項目は小、1タスクでバンドル消化):
+- freeBefore トグル(spec §3.3、現状常時 true ハードコード) / bpmOverride の明示クリアUI
+- gridModel.effectiveBpm と deriveGrid の有効判定述語の重複解消
+- MarkerTable: showDeleted 中の「全N件」表示 / cross+showDeleted 時のソース列形骸化
+- exportWriter: failed[].path の未dedupe生ファイル名 / マルチソース wavcues の ffmpeg 重複抽出キャッシュ / ExportPanel テストの act() 警告
+- recent.ts の欠損パス剪定 / menu.ts の文言ハードコード(main から参照可能な共有 strings へ) / 保存キャンセルの message-sniffing → typed SaveOutcome 化
+- WaveCanvas アンカードラッグのスナップが 30fps ハードコード → project.fps 化
+- 再生用 WAV の IPC 二重読み(App.tsx の pb.load と EditorScreen の peaks decode)解消
+- followPlayhead が死状態(SET_FOLLOW に dispatcher なし・消費者なし)— 実装するか削除 / SET_TIME_UNIT アクション未使用(削除可)
+- selectors の単一スロットキャッシュ(複数ソース同時表示するなら拡張) / jobDir の LRU 掃除(長セッションで~GB) / BrowserWindow sandbox:true 再検討 / dev-mode engineCommand の Windows パス(.venv/Scripts/python.exe)
+- EngineClient: JSON parse 失敗の診断ログ / NDJSON 行バッファ上限
+- timeFormat: parseTime の桁あふれ許容("99:99"→6039s) / formatTime の NaN/Infinity ガード / snapSec nearest の NaN 挙動
+
+**E. docs/manual-qa.md 完全版**(docs/manual-qa-editor.md を核に、実ソフト読み込みチェックリスト: AE / Resolve / Premiere / Blender / REAPER / Logic — spec §10)
